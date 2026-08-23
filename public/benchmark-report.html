@@ -31,12 +31,12 @@
 <body>
   <p style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.12em;color:#4f46e5;font-weight:600;">KV Cache App · Inference benchmark</p>
   <h1>Executive report: memory model ↔ measured latency</h1>
-  <p class="lead">Two benchmark tiers: <strong>model layer</strong> (isolated GPU, KV math, prefill/decode) vs <strong>serving layer</strong> (HTTP, concurrency, prefix cache). Links GQA KV sizing to measured TTFT. 4.7× TTFT reduction (serving, warm vs cold @ 10k). See <code>docs/LAYERS.md</code>.</p>
+  <p class="lead">Two benchmark tiers: <strong>model layer</strong> (isolated GPU, KV math, prefill/decode) vs <strong>serving layer</strong> (HTTP, concurrency, prefix cache). Links GQA KV sizing to measured TTFT. 1.1× TTFT reduction (serving, warm vs cold @ 10k). See <code>docs/LAYERS.md</code>.</p>
 
   <div class="kpi">
-    <div class="card"><span>Total runs</span><b>19</b></div>
+    <div class="card"><span>Total runs</span><b>23</b></div>
     <div class="card"><span>Model layer</span><b>8</b></div>
-    <div class="card"><span>Serving layer</span><b>11</b></div>
+    <div class="card"><span>Serving layer</span><b>15</b></div>
     <div class="card"><span>GQA vs dense</span><b>7×</b></div>
   </div>
 
@@ -83,6 +83,10 @@
     <p class="lead">HTTP endpoints, concurrency, prefix-cache hits (<code>cached_prompt_tokens</code>), queueing. vLLM+llmperf, Fireworks, DO Dedicated.</p>
     <div class="row">
           <span class="lbl">S≈1024</span>
+          <div class="bar" style="width:25.3%;background:#0d9488"></div>
+          <span class="val">1044 ms · KV 0.0538 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈1024</span>
           <div class="bar" style="width:5.3%;background:#0d9488"></div>
           <span class="val">218 ms · KV 0.055 GiB</span>
         </div><div class="row">
@@ -93,6 +97,18 @@
           <span class="lbl">S≈8192</span>
           <div class="bar" style="width:34.5%;background:#0d9488"></div>
           <span class="val">1420 ms · KV 0.441 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:26.7%;background:#0d9488"></div>
+          <span class="val">1099 ms · KV 0.5357 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:33.5%;background:#0d9488"></div>
+          <span class="val">1379 ms · KV 0.5396 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:31.6%;background:#0d9488"></div>
+          <span class="val">1304 ms · KV 0.5361 GiB</span>
         </div><div class="row">
           <span class="lbl">S≈10240</span>
           <div class="bar" style="width:43.3%;background:#0d9488"></div>
@@ -282,6 +298,28 @@
           <td>serving</td>
           <td>B</td>
           <td>kv_cache</td>
+          <td>fireworks</td>
+          <td class="mono">10240</td>
+          <td>cold_prefix</td>
+          <td class="mono">1379</td>
+          <td class="mono">128000000.0</td>
+          <td class="mono">0</td>
+          <td class="mono">0.5396</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>B</td>
+          <td>kv_cache</td>
+          <td>fireworks</td>
+          <td class="mono">10240</td>
+          <td>warm_prefix</td>
+          <td class="mono">1304</td>
+          <td class="mono">128000000.0</td>
+          <td class="mono">0</td>
+          <td class="mono">0.5361</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>B</td>
+          <td>kv_cache</td>
           <td>digitalocean_gpu</td>
           <td class="mono">10240</td>
           <td>cold_prefix</td>
@@ -329,10 +367,32 @@
           <td>fireworks</td>
           <td class="mono">1024</td>
           <td>single</td>
+          <td class="mono">1044</td>
+          <td class="mono">128000000.0</td>
+          <td class="mono">0</td>
+          <td class="mono">0.0538</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>C</td>
+          <td>api</td>
+          <td>fireworks</td>
+          <td class="mono">1024</td>
+          <td>single</td>
           <td class="mono">245</td>
           <td class="mono">71.4</td>
           <td class="mono">0</td>
           <td class="mono">0.055</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>C</td>
+          <td>api</td>
+          <td>fireworks</td>
+          <td class="mono">10240</td>
+          <td>single</td>
+          <td class="mono">1099</td>
+          <td class="mono">128000000.0</td>
+          <td class="mono">0</td>
+          <td class="mono">0.5357</td>
         </tr><tr>
           <td>serving</td>
           <td>C</td>
@@ -365,6 +425,6 @@ python benchmarks/scripts/generate_report.py
   </section>
 
   <p><a href="/">← Back to KV explorer</a></p>
-  <footer>Generated 2026-08-23 20:03 UTC · Sample data included for demo; replace with live runs via scripts.</footer>
+  <footer>Generated 2026-08-23 20:35 UTC · Sample data included for demo; replace with live runs via scripts.</footer>
 </body>
 </html>
