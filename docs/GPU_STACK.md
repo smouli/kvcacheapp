@@ -142,13 +142,15 @@ Not fully automated in this demo repo, but the architecture you'd describe in an
 
 ---
 
-## Modal vs DO GPU
+## Modal vs DigitalOcean GPU
 
-| | Modal (`benchmark:modal`) | DO GPU (`serve_vllm.sh`) |
-|--|---------------------------|---------------------------|
-| Purpose | **Model layer** — KV math, prefill TTFT | **Serving layer** — vLLM, TP, quant, load |
-| Multi-GPU | Single GPU per function today | Full TP / NCCL via vLLM |
-| Quantization | bf16/fp16 only (transformers) | FP8, AWQ, GPTQ via vLLM |
-| Cost | Pay per second | Droplet hourly |
+| | Modal (this repo) | DO GPU droplet |
+|--|-------------------|----------------|
+| **Model layer** | `npm run benchmark:modal` (transformers) | Optional |
+| **Serving layer** | `npm run benchmark:modal:vllm` (vLLM on Modal GPU) | `serve_vllm.sh` + engine bench |
+| **Cost** | Pay per second | Hourly droplet |
+| **NCCL / multi-GPU** | `--tp 2` on multi-GPU Modal | Native on multi-GPU droplet |
+| **Interview story** | Same vLLM + prefix cache + concurrency | “Runs on DigitalOcean product” |
 
-Use **Modal** for cheap architecture/KV experiments; use **DO GPU + vLLM** for the manager-facing serving story with NCCL and quantization.
+**You can do serving-layer GPU work on Modal** and skip the droplet for demos. Use DO when you want the brand/story to be DigitalOcean-specific.
+

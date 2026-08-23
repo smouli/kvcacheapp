@@ -16,6 +16,8 @@
     "benchmark:serve": "bash benchmarks/scripts/serve_vllm.sh",
     "benchmark:modal": "modal run benchmarks/modal_engine.py",
     "benchmark:modal:quick": "modal run benchmarks/modal_engine.py --quick",
+    "benchmark:modal:vllm": "modal run benchmarks/modal_vllm.py",
+    "benchmark:modal:vllm:quick": "modal run benchmarks/modal_vllm.py --quick",
     "benchmark:overnight": "bash benchmarks/scripts/run_overnight.sh"
   },
   "dependencies": {

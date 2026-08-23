@@ -25,9 +25,38 @@ def load_rows(paths: list[Path]) -> list[dict]:
             continue
         with path.open(newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
-                row["stack_layer"] = infer_stack_layer(row)
-                rows.append(row)
+                rows.append(normalize_row(row))
     return rows
+
+
+def normalize_row(row: dict) -> dict:
+    """Align alternate CSV schemas onto the report's canonical field names."""
+    aliases = {
+        "run_id": ["run_id"],
+        "ttft_ms_p50": ["ttft_ms_p50"],
+        "ttft_ms_p95": ["ttft_ms_p95"],
+        "tpot_ms_p50": ["tpot_ms_p50", "tpot_ms_p50"],
+        "output_tok_s_p50": ["output_tok_s_p50", "output_tok_s_p50"],
+        "input_tokens_target": ["input_tokens_target", "input_tokens_target"],
+        "output_tokens_target": ["output_tokens_target", "output_tokens_target"],
+        "cached_prompt_tokens": ["cached_prompt_tokens", "cached_prompt_tokens"],
+        "kv_gib_modeled_gqa": ["kv_gib_modeled_gqa", "kv_gib_modeled_gqa"],
+        "kv_gib_modeled_dense": ["kv_gib_modeled_dense", "kv_gib_modeled_dense"],
+        "peak_gpu_gib": ["peak_gpu_gib", "peak_gpu_gib"],
+        "provider": ["provider"],
+        "engine": ["engine"],
+        "cache_mode": ["cache_mode", "cache_mode"],
+    }
+    out = dict(row)
+    for canon, keys in aliases.items():
+        if out.get(canon) not in (None, ""):
+            continue
+        for k in keys:
+            if k != canon and row.get(k) not in (None, ""):
+                out[canon] = row[k]
+                break
+    out["stack_layer"] = infer_stack_layer(out)
+    return out
 
 
 def infer_stack_layer(row: dict) -> str:
@@ -36,7 +65,10 @@ def infer_stack_layer(row: dict) -> str:
         return explicit
     layer = (row.get("layer") or "").strip()
     provider = (row.get("provider") or "").strip()
-    if layer == "inference" or provider == "modal":
+    engine = (row.get("engine") or "").lower()
+    if "vllm" in engine:
+        return "serving"
+    if layer == "inference" or (provider == "modal" and "vllm" not in engine):
         return "model"
     return "serving"
 
@@ -207,6 +239,7 @@ def main() -> None:
     if not paths:
         paths = [
             ROOT / "benchmarks" / "results" / "modal_runs.csv",
+            ROOT / "benchmarks" / "results" / "modal_vllm_runs.csv",
             ROOT / "benchmarks" / "results" / "api_runs.csv",
             ROOT / "benchmarks" / "results" / "engine_runs.csv",
             SAMPLE_MODAL,
