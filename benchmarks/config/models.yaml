@@ -1,0 +1,88 @@
+# vLLM serve profiles — pick one on your DO GPU droplet:
+#   bash benchmarks/scripts/serve_vllm.sh qwen7b_bf16
+#   bash benchmarks/scripts/serve_vllm.sh qwen32b_tp2_bf16
+#   bash benchmarks/scripts/serve_vllm.sh qwen72b_awq_int4
+
+defaults:
+  host: "0.0.0.0"
+  port: 8000
+  enable_prefix_caching: true
+  gpu_memory_utilization: 0.92
+
+# KV math for benchmark CSV linkage (Qwen2.5 family)
+kv_params:
+  Qwen/Qwen2.5-7B-Instruct: { layers: 28, n_kv: 4, head_dim: 128, hidden: 3584 }
+  Qwen/Qwen2.5-32B-Instruct: { layers: 64, n_kv: 8, head_dim: 128, hidden: 5120 }
+  Qwen/Qwen2.5-72B-Instruct: { layers: 80, n_kv: 8, head_dim: 128, hidden: 8192 }
+  Qwen/Qwen2.5-72B-Instruct-AWQ: { layers: 80, n_kv: 8, head_dim: 128, hidden: 8192 }
+
+profiles:
+  # --- Single H100 / A100 (bf16) ---
+  qwen7b_bf16:
+    model: Qwen/Qwen2.5-7B-Instruct
+    tensor_parallel: 1
+    dtype: bfloat16
+    quantization: null
+    max_model_len: 32768
+    min_vram_gib: 16
+    notes: "Baseline serving; fits 1× T4/A10G/H100"
+
+  qwen7b_fp8:
+    model: Qwen/Qwen2.5-7B-Instruct
+    tensor_parallel: 1
+    dtype: bfloat16
+    quantization: fp8
+    max_model_len: 32768
+    min_vram_gib: 10
+    notes: "FP8 weights (H100); vLLM --quantization fp8"
+
+  # --- Multi-GPU tensor parallel (NCCL) ---
+  qwen32b_tp2_bf16:
+    model: Qwen/Qwen2.5-32B-Instruct
+    tensor_parallel: 2
+    dtype: bfloat16
+    quantization: null
+    max_model_len: 32768
+    min_vram_gib: 40
+    gpu_count: 2
+    notes: "32B bf16 across 2 GPUs; vLLM TP uses NCCL all-reduce"
+
+  qwen72b_tp2_bf16:
+    model: Qwen/Qwen2.5-72B-Instruct
+    tensor_parallel: 2
+    dtype: bfloat16
+    quantization: null
+    max_model_len: 32768
+    min_vram_gib: 80
+    gpu_count: 2
+    notes: "72B bf16; 2× H100 80GB recommended"
+
+  qwen72b_tp4_bf16:
+    model: Qwen/Qwen2.5-72B-Instruct
+    tensor_parallel: 4
+    dtype: bfloat16
+    quantization: null
+    max_model_len: 16384
+    min_vram_gib: 40
+    gpu_count: 4
+    notes: "72B bf16; 4× 40GB+ GPUs"
+
+  # --- Quantization (INT4 AWQ) ---
+  qwen72b_awq_int4:
+    model: Qwen/Qwen2.5-72B-Instruct-AWQ
+    tensor_parallel: 1
+    dtype: bfloat16
+    quantization: awq
+    max_model_len: 32768
+    min_vram_gib: 48
+    notes: "INT4 AWQ; single H100 80GB"
+
+  qwen72b_awq_int4_tp2:
+    model: Qwen/Qwen2.5-72B-Instruct-AWQ
+    tensor_parallel: 2
+    dtype: bfloat16
+    quantization: awq
+    max_model_len: 32768
+    min_vram_gib: 24
+    gpu_count: 2
+    notes: "INT4 AWQ + TP=2 for long context or headroom"

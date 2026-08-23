@@ -1,0 +1,1 @@
+run_id,phase,stack_layer,layer,provider,model,engine,input_tokens_target,output_tokens_target,concurrency,workload,cache_mode,session_affinity,ttft_ms_p50,ttft_ms_p95,tpot_ms_p50,output_tok_s_p50,prompt_tokens,completion_tokens,cached_prompt_tokens,kv_gib_modeled_gqa,kv_gib_modeled_dense,peak_gpu_gib,tensor_parallel,quantization,notes,timestamp

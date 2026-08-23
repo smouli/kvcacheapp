@@ -1,0 +1,376 @@
+.app {
+  text-align: left;
+  padding: 2rem 1.5rem 3rem;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.hero {
+  margin-bottom: 2rem;
+}
+
+.hero-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.hero-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.nav-chip {
+  display: inline-block;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--text-h);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+}
+
+.nav-chip:hover {
+  border-color: var(--accent);
+}
+
+.stat-duo {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+@media (min-width: 520px) {
+  .stat-duo {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.primary-stat .stat-main {
+  color: var(--accent);
+}
+
+.stat-main.muted {
+  font-size: clamp(1.1rem, 3vw, 1.45rem);
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.grid2 {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 520px) {
+  .grid2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.explain-panel a {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.eyebrow {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.hero h1 {
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+}
+
+.lede {
+  margin: 0;
+  max-width: 42rem;
+  line-height: 1.55;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+.layout {
+  display: grid;
+  gap: 1.25rem;
+  /* Let grid columns shrink below min-content (avoids canvas/grid width feedback). */
+  min-width: 0;
+}
+
+@media (min-width: 840px) {
+  .layout {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.panel {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem 1.25rem 1.5rem;
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.panel h2 {
+  font-size: 1rem;
+  margin: 0 0 1rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.field > span:first-child,
+.field-head span:first-child {
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.field-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.field .val {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+select,
+input[type='number'] {
+  font: inherit;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.ticks-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text);
+  margin-top: 0.15rem;
+}
+
+.grid2 {
+  display: grid;
+  gap: 0.75rem;
+}
+
+@media (min-width: 520px) {
+  .grid2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.hint {
+  font-size: 0.8rem;
+  margin: 0;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.stat-block {
+  margin-bottom: 1.25rem;
+}
+
+.stat-label {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.stat-main {
+  margin: 0.2rem 0 0;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.stat-sub {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.kv-seq-chart {
+  margin-bottom: 1.25rem;
+}
+
+.kv-seq-chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.kv-seq-chart-sub {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.kv-seq-chart-wrap {
+  width: 100%;
+  min-width: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.kv-seq-chart-wrap canvas {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  height: 280px;
+  vertical-align: top;
+  cursor: grab;
+  touch-action: none;
+}
+
+.kv-seq-chart-wrap canvas.kv-chart-dragging {
+  cursor: grabbing;
+}
+
+.kv-seq-chart-foot {
+  margin: 0.45rem 0 0;
+  font-size: 0.72rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.formula-card {
+  border: 1px dashed var(--accent-border);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  background: var(--accent-bg);
+  margin-bottom: 1rem;
+}
+
+.formula-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text);
+}
+
+.formula {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  word-break: break-all;
+  color: var(--text-h);
+}
+
+.formula-eq {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-h);
+}
+
+.explain-panel {
+  margin-top: 2rem;
+  padding: 1.35rem 1.25rem 1.5rem;
+  max-width: 44rem;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--code-bg);
+  box-shadow: var(--shadow);
+}
+
+.explain-panel h2 {
+  font-size: 1.1rem;
+  margin: 0 0 0.75rem;
+  letter-spacing: -0.02em;
+}
+
+.explain-sub {
+  font-size: 0.95rem;
+  margin: 1.25rem 0 0.5rem;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.explain-panel p {
+  margin: 0 0 0.85rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.explain-panel p:last-child {
+  margin-bottom: 0;
+}
+
+.explain-formula {
+  display: block;
+  margin: 0.35rem 0 0.85rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.82rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-h);
+}
+
+.explain-list {
+  margin: 0 0 1rem;
+  padding-left: 1.2rem;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.explain-list li {
+  margin-bottom: 0.35rem;
+}
+
+.foot {
+  margin-top: 2rem;
+  font-size: 0.78rem;
+  color: var(--text);
+  max-width: 40rem;
+  line-height: 1.45;
+}

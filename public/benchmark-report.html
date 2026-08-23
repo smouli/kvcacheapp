@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>KV Cache Inference Benchmark Report</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; color: #0f172a; background: #f8fafc; }
+    body { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+    h1 { font-size: 1.75rem; letter-spacing: -0.02em; }
+    .lead { color: #475569; line-height: 1.55; max-width: 42rem; }
+    .kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem 1.1rem; }
+    .card b { display: block; font-size: 1.5rem; color: #4f46e5; }
+    .card span { font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; }
+    section { margin-top: 2rem; }
+    h2 { font-size: 1.1rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; background: #fff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; }
+    th, td { padding: 0.55rem 0.65rem; text-align: left; border-bottom: 1px solid #f1f5f9; }
+    th { background: #f1f5f9; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .mono { font-family: ui-monospace, monospace; font-size: 0.92em; }
+    .bar-wrap { background: #e2e8f0; border-radius: 999px; height: 10px; flex: 1; overflow: hidden; }
+    .bar { height: 100%; border-radius: 999px; }
+    .row { display: flex; align-items: center; gap: 0.75rem; margin: 0.5rem 0; }
+    .lbl { width: 4.5rem; font-size: 0.8rem; color: #64748b; }
+    .val { font-size: 0.78rem; color: #475569; white-space: nowrap; }
+    a { color: #4f46e5; }
+    footer { margin-top: 2.5rem; font-size: 0.78rem; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <p style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.12em;color:#4f46e5;font-weight:600;">KV Cache App · Inference benchmark</p>
+  <h1>Executive report: memory model ↔ measured latency</h1>
+  <p class="lead">Two benchmark tiers: <strong>model layer</strong> (isolated GPU, KV math, prefill/decode) vs <strong>serving layer</strong> (HTTP, concurrency, prefix cache). Links GQA KV sizing to measured TTFT. 4.7× TTFT reduction (serving, warm vs cold @ 10k). See <code>docs/LAYERS.md</code>.</p>
+
+  <div class="kpi">
+    <div class="card"><span>Total runs</span><b>19</b></div>
+    <div class="card"><span>Model layer</span><b>8</b></div>
+    <div class="card"><span>Serving layer</span><b>11</b></div>
+    <div class="card"><span>GQA vs dense</span><b>7×</b></div>
+  </div>
+
+  <section>
+    <h2>Model layer — architecture &amp; KV (batch=1, no API)</h2>
+    <p class="lead">Isolated forward/generate: prefill TTFT, decode tok/s, modeled KV GiB, peak GPU memory. <strong>Modal</strong> or single-process transformers/vLLM.</p>
+    <div class="row">
+          <span class="lbl">S≈1024</span>
+          <div class="bar" style="width:14.9%;background:#6366f1"></div>
+          <span class="val">1254 ms · KV 0.0132 GiB · peak 1.232 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈1024</span>
+          <div class="bar" style="width:10.2%;background:#6366f1"></div>
+          <span class="val">856 ms · KV 0.0615 GiB · peak 14.547 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈8192</span>
+          <div class="bar" style="width:100.0%;background:#6366f1"></div>
+          <span class="val">8418 ms · KV 0.0952 GiB · peak 9.323 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈8192</span>
+          <div class="bar" style="width:24.2%;background:#6366f1"></div>
+          <span class="val">2040 ms · KV 0.4443 GiB · peak 17.006 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:31.2%;background:#6366f1"></div>
+          <span class="val">2625 ms · KV 0.5537 GiB · peak 17.709 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:31.4%;background:#6366f1"></div>
+          <span class="val">2645 ms · KV 0.5742 GiB · peak 17.709 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:10.1%;background:#6366f1"></div>
+          <span class="val">848 ms · KV 0.1187 GiB · peak 3.965 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:3.3%;background:#6366f1"></div>
+          <span class="val">280 ms · KV 0.123 GiB · peak 3.964 GiB</span>
+        </div>
+  </section>
+
+  <section>
+    <h2>Serving layer — what clients see (API / vLLM under load)</h2>
+    <p class="lead">HTTP endpoints, concurrency, prefix-cache hits (<code>cached_prompt_tokens</code>), queueing. vLLM+llmperf, Fireworks, DO Dedicated.</p>
+    <div class="row">
+          <span class="lbl">S≈1024</span>
+          <div class="bar" style="width:5.3%;background:#0d9488"></div>
+          <span class="val">218 ms · KV 0.055 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈1024</span>
+          <div class="bar" style="width:5.9%;background:#0d9488"></div>
+          <span class="val">245 ms · KV 0.055 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈8192</span>
+          <div class="bar" style="width:34.5%;background:#0d9488"></div>
+          <span class="val">1420 ms · KV 0.441 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:43.3%;background:#0d9488"></div>
+          <span class="val">1785 ms · KV 0.551 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:54.4%;background:#0d9488"></div>
+          <span class="val">2240 ms · KV 0.551 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:100.0%;background:#0d9488"></div>
+          <span class="val">4120 ms · KV 0.551 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:43.9%;background:#0d9488"></div>
+          <span class="val">1810 ms · KV 0.551 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:9.3%;background:#0d9488"></div>
+          <span class="val">385 ms · KV 0.551 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:46.6%;background:#0d9488"></div>
+          <span class="val">1920 ms · KV 0.551 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:10.2%;background:#0d9488"></div>
+          <span class="val">420 ms · KV 0.551 GiB</span>
+        </div><div class="row">
+          <span class="lbl">S≈10240</span>
+          <div class="bar" style="width:48.1%;background:#0d9488"></div>
+          <span class="val">1980 ms · KV 0.551 GiB</span>
+        </div>
+  </section>
+
+  <section>
+    <h2>Full results matrix</h2>
+    <table>
+      <thead><tr>
+        <th>Stack</th><th>Phase</th><th>Layer</th><th>Provider</th><th>Input</th><th>Workload</th>
+        <th>TTFT p50</th><th>Tok/s</th><th>Cached</th><th>KV GiB</th>
+      </tr></thead>
+      <tbody><tr>
+          <td>model</td>
+          <td>A</td>
+          <td>inference</td>
+          <td>modal</td>
+          <td class="mono">1024</td>
+          <td>single</td>
+          <td class="mono">1254</td>
+          <td class="mono">37.76</td>
+          <td class="mono">0</td>
+          <td class="mono">0.0132</td>
+        </tr><tr>
+          <td>model</td>
+          <td>A</td>
+          <td>inference</td>
+          <td>modal</td>
+          <td class="mono">1024</td>
+          <td>single</td>
+          <td class="mono">856</td>
+          <td class="mono">31.31</td>
+          <td class="mono">0</td>
+          <td class="mono">0.0615</td>
+        </tr><tr>
+          <td>model</td>
+          <td>A</td>
+          <td>inference</td>
+          <td>modal</td>
+          <td class="mono">10240</td>
+          <td>single</td>
+          <td class="mono">2625</td>
+          <td class="mono">26.19</td>
+          <td class="mono">0</td>
+          <td class="mono">0.5537</td>
+        </tr><tr>
+          <td>model</td>
+          <td>A</td>
+          <td>inference</td>
+          <td>modal</td>
+          <td class="mono">10240</td>
+          <td>single</td>
+          <td class="mono">2645</td>
+          <td class="mono">25.44</td>
+          <td class="mono">0</td>
+          <td class="mono">0.5742</td>
+        </tr><tr>
+          <td>model</td>
+          <td>A</td>
+          <td>inference</td>
+          <td>modal</td>
+          <td class="mono">10240</td>
+          <td>single</td>
+          <td class="mono">848</td>
+          <td class="mono">68.31</td>
+          <td class="mono">0</td>
+          <td class="mono">0.1187</td>
+        </tr><tr>
+          <td>model</td>
+          <td>A</td>
+          <td>inference</td>
+          <td>modal</td>
+          <td class="mono">10240</td>
+          <td>single</td>
+          <td class="mono">280</td>
+          <td class="mono">57.72</td>
+          <td class="mono">0</td>
+          <td class="mono">0.123</td>
+        </tr><tr>
+          <td>model</td>
+          <td>A</td>
+          <td>inference</td>
+          <td>modal</td>
+          <td class="mono">8192</td>
+          <td>single</td>
+          <td class="mono">8418</td>
+          <td class="mono">35.62</td>
+          <td class="mono">0</td>
+          <td class="mono">0.0952</td>
+        </tr><tr>
+          <td>model</td>
+          <td>A</td>
+          <td>inference</td>
+          <td>modal</td>
+          <td class="mono">8192</td>
+          <td>single</td>
+          <td class="mono">2040</td>
+          <td class="mono">26.64</td>
+          <td class="mono">0</td>
+          <td class="mono">0.4443</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>A</td>
+          <td>engine</td>
+          <td>digitalocean_gpu</td>
+          <td class="mono">1024</td>
+          <td>single</td>
+          <td class="mono">218</td>
+          <td class="mono">80.6</td>
+          <td class="mono">0</td>
+          <td class="mono">0.055</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>A</td>
+          <td>engine</td>
+          <td>digitalocean_gpu</td>
+          <td class="mono">10240</td>
+          <td>single</td>
+          <td class="mono">1785</td>
+          <td class="mono">83.3</td>
+          <td class="mono">0</td>
+          <td class="mono">0.551</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>A</td>
+          <td>engine</td>
+          <td>digitalocean_gpu</td>
+          <td class="mono">10240</td>
+          <td>single</td>
+          <td class="mono">2240</td>
+          <td class="mono">70.4</td>
+          <td class="mono">0</td>
+          <td class="mono">0.551</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>A</td>
+          <td>engine</td>
+          <td>digitalocean_gpu</td>
+          <td class="mono">10240</td>
+          <td>single</td>
+          <td class="mono">4120</td>
+          <td class="mono">54.1</td>
+          <td class="mono">0</td>
+          <td class="mono">0.551</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>A</td>
+          <td>engine</td>
+          <td>digitalocean_gpu</td>
+          <td class="mono">8192</td>
+          <td>single</td>
+          <td class="mono">1420</td>
+          <td class="mono">82.6</td>
+          <td class="mono">0</td>
+          <td class="mono">0.441</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>B</td>
+          <td>kv_cache</td>
+          <td>digitalocean_gpu</td>
+          <td class="mono">10240</td>
+          <td>cold_prefix</td>
+          <td class="mono">1810</td>
+          <td class="mono">82.0</td>
+          <td class="mono">0</td>
+          <td class="mono">0.551</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>B</td>
+          <td>kv_cache</td>
+          <td>digitalocean_gpu</td>
+          <td class="mono">10240</td>
+          <td>warm_prefix</td>
+          <td class="mono">385</td>
+          <td class="mono">84.7</td>
+          <td class="mono">10112</td>
+          <td class="mono">0.551</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>B</td>
+          <td>kv_cache</td>
+          <td>fireworks</td>
+          <td class="mono">10240</td>
+          <td>cold_prefix</td>
+          <td class="mono">1920</td>
+          <td class="mono">74.1</td>
+          <td class="mono">0</td>
+          <td class="mono">0.551</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>B</td>
+          <td>kv_cache</td>
+          <td>fireworks</td>
+          <td class="mono">10240</td>
+          <td>warm_prefix</td>
+          <td class="mono">420</td>
+          <td class="mono">76.3</td>
+          <td class="mono">9984</td>
+          <td class="mono">0.551</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>C</td>
+          <td>api</td>
+          <td>fireworks</td>
+          <td class="mono">1024</td>
+          <td>single</td>
+          <td class="mono">245</td>
+          <td class="mono">71.4</td>
+          <td class="mono">0</td>
+          <td class="mono">0.055</td>
+        </tr><tr>
+          <td>serving</td>
+          <td>C</td>
+          <td>api</td>
+          <td>fireworks</td>
+          <td class="mono">10240</td>
+          <td>single</td>
+          <td class="mono">1980</td>
+          <td class="mono">72.5</td>
+          <td class="mono">0</td>
+          <td class="mono">0.551</td>
+        </tr></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>How to reproduce</h2>
+    <pre class="mono" style="background:#fff;border:1px solid #e2e8f0;padding:1rem;border-radius:8px;overflow:auto;font-size:0.8rem;">
+# API (no GPU)
+pip install -r benchmarks/requirements.txt
+export OPENAI_API_KEY=... OPENAI_BASE_URL=https://api.fireworks.ai/inference/v1
+python benchmarks/scripts/run_api_benchmark.py
+
+# Engine (DigitalOcean GPU droplet)
+bash benchmarks/scripts/run_engine_benchmark.sh
+
+# Regenerate this page
+python benchmarks/scripts/generate_report.py
+    </pre>
+  </section>
+
+  <p><a href="/">← Back to KV explorer</a></p>
+  <footer>Generated 2026-08-23 20:03 UTC · Sample data included for demo; replace with live runs via scripts.</footer>
+</body>
+</html>

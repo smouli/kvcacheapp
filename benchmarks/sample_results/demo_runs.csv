@@ -1,0 +1,12 @@
+run_id,phase,stack_layer,layer,provider,model,engine,input_tokens_target,output_tokens_target,concurrency,workload,cache_mode,session_affinity,ttft_ms_p50,ttft_ms_p95,tpot_ms_p50,output_tok_s_p50,prompt_tokens,completion_tokens,cached_prompt_tokens,kv_gib_modeled_gqa,kv_gib_modeled_dense,notes,timestamp
+demo-a-001,A,serving,engine,digitalocean_gpu,Qwen/Qwen2.5-7B-Instruct,vLLM-0.8.x,1024,128,1,single,off,,218,285,12.4,80.6,1024,128,0,0.055,0.384,Serving: vLLM single client conc=1,2026-08-22T08:00:00Z
+demo-a-002,A,serving,engine,digitalocean_gpu,Qwen/Qwen2.5-7B-Instruct,vLLM-0.8.x,8192,128,1,single,off,,1420,1680,12.1,82.6,8192,128,0,0.441,3.087,Prefill-dominated TTFT,2026-08-22T08:15:00Z
+demo-a-003,A,serving,engine,digitalocean_gpu,Qwen/Qwen2.5-7B-Instruct,vLLM-0.8.x,10240,128,1,single,off,,1785,2100,12.0,83.3,10240,128,0,0.551,3.857,AA-style 10k input shape,2026-08-22T08:30:00Z
+demo-a-004,A,serving,engine,digitalocean_gpu,Qwen/Qwen2.5-7B-Instruct,vLLM-0.8.x,10240,512,8,single,off,,2240,2680,14.2,70.4,10240,512,0,0.551,3.857,Serving: concurrency 8,2026-08-22T08:45:00Z
+demo-a-005,A,serving,engine,digitalocean_gpu,Qwen/Qwen2.5-7B-Instruct,vLLM-0.8.x,10240,128,32,single,off,,4120,5200,18.5,54.1,10240,128,0,0.551,3.857,Serving: queue at conc 32,2026-08-22T09:00:00Z
+demo-b-001,B,serving,kv_cache,digitalocean_gpu,Qwen/Qwen2.5-7B-Instruct,vLLM-0.8.x,10240,128,1,cold_prefix,off,,1810,2050,12.2,82.0,10240,128,0,0.551,3.857,Serving: cold prefix,2026-08-22T10:00:00Z
+demo-b-002,B,serving,kv_cache,digitalocean_gpu,Qwen/Qwen2.5-7B-Instruct,vLLM-0.8.x,10240,128,1,warm_prefix,on,session-demo-1,385,460,11.8,84.7,10240,128,10112,0.551,3.857,Serving: warm prefix ~99% hit,2026-08-22T10:05:00Z
+demo-b-003,B,serving,kv_cache,fireworks,Qwen/Qwen2.5-7B-Instruct,fireworks-serverless,10240,128,1,cold_prefix,unknown,,1920,2400,13.5,74.1,10240,128,0,0.551,3.857,Serving API cold,2026-08-22T11:00:00Z
+demo-b-004,B,serving,kv_cache,fireworks,Qwen/Qwen2.5-7B-Instruct,fireworks-serverless,10240,128,1,warm_prefix,on,session-demo-1,420,510,13.1,76.3,10240,128,9984,0.551,3.857,Serving API warm + cached header,2026-08-22T11:05:00Z
+demo-c-001,C,serving,api,fireworks,Qwen/Qwen2.5-7B-Instruct,fireworks-serverless,1024,128,1,single,on,,245,310,14.0,71.4,1024,128,0,0.055,0.384,AA-like 1k shape,2026-08-22T12:00:00Z
+demo-c-002,C,serving,api,fireworks,Qwen/Qwen2.5-7B-Instruct,fireworks-serverless,10240,128,1,single,on,,1980,2350,13.8,72.5,10240,128,0,0.551,3.857,AA-like 10k shape,2026-08-22T12:15:00Z

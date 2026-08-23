@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.tools/
+benchmarks/results/
+.env
+.env.*
+*.pyc
+__pycache__/
+.DS_Store

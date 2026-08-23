@@ -1,0 +1,30 @@
+# Benchmark matrix — Phase A (engine) + Phase B (KV cache) + Phase C (API)
+# Run via benchmarks/scripts/run_engine_benchmark.sh or run_api_benchmark.py
+
+model: Qwen/Qwen2.5-7B-Instruct
+dtype: bfloat16
+gpu_target: DigitalOcean GPU Droplet (H100 80GB)
+
+input_tokens: [1024, 8192, 10240]
+output_tokens: [128, 512]
+concurrency: [1, 8, 32]
+
+workloads:
+  - id: single
+    description: Standard chat completion
+  - id: cold_prefix
+    description: Unique 10k prefix each request (no cache hit)
+  - id: warm_prefix
+    description: Identical 10k prefix + new user line; use session affinity
+  - id: multi_turn_10
+    description: 10-turn thread; measure TTFT on turns 1/5/10
+
+layers:
+  engine:
+    tool: llmperf token_benchmark_ray.py
+    server: vLLM OpenAI /v1
+  kv_cache:
+    compare: [prefix_caching_off, prefix_caching_on]
+  api:
+    providers: [fireworks, openai_compatible]
+    headers: [x-session-affinity]

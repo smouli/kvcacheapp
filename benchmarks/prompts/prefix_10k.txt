@@ -1,0 +1,19 @@
+This is a synthetic 10k-token-class context block for prefix-cache benchmarks.
+It simulates a long system prompt plus document context repeated across requests.
+
+Section 1 — Product requirements
+The inference stack must serve Qwen-class models with grouped-query attention,
+prefix caching, and continuous batching on a single GPU droplet.
+
+Section 2 — KV cache
+Memory scales with batch B, sequence S, layers L, KV head count, and head dimension.
+For Qwen2.5-7B: 28 layers, 4 KV heads, head dim 128, not full hidden width 3584.
+
+Section 3 — Benchmarks
+Measure TTFT (prefill + queue), TPOT (decode), and cached prompt tokens on APIs.
+Compare cold vs warm prefix workloads with session affinity.
+
+Section 4 — DigitalOcean
+Deploy vLLM on a GPU droplet; serve the static KV explorer via App Platform or nginx.
+
+Repeat block for length:
