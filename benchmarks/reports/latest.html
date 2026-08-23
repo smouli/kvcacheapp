@@ -1,430 +1,292 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>KV Cache Inference Benchmark Report</title>
-  <style>
-    :root { font-family: system-ui, sans-serif; color: #0f172a; background: #f8fafc; }
-    body { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
-    h1 { font-size: 1.75rem; letter-spacing: -0.02em; }
-    .lead { color: #475569; line-height: 1.55; max-width: 42rem; }
-    .kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
-    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem 1.1rem; }
-    .card b { display: block; font-size: 1.5rem; color: #4f46e5; }
-    .card span { font-size: 0.8rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; }
-    section { margin-top: 2rem; }
-    h2 { font-size: 1.1rem; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; background: #fff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; }
-    th, td { padding: 0.55rem 0.65rem; text-align: left; border-bottom: 1px solid #f1f5f9; }
-    th { background: #f1f5f9; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
-    .mono { font-family: ui-monospace, monospace; font-size: 0.92em; }
-    .bar-wrap { background: #e2e8f0; border-radius: 999px; height: 10px; flex: 1; overflow: hidden; }
-    .bar { height: 100%; border-radius: 999px; }
-    .row { display: flex; align-items: center; gap: 0.75rem; margin: 0.5rem 0; }
-    .lbl { width: 4.5rem; font-size: 0.8rem; color: #64748b; }
-    .val { font-size: 0.78rem; color: #475569; white-space: nowrap; }
-    a { color: #4f46e5; }
-    footer { margin-top: 2.5rem; font-size: 0.78rem; color: #94a3b8; }
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>KV Cache · Benchmark Report</title>
+<style>
+:root {
+  --bg:#f4f1ea; --ink:#1c1917; --muted:#78716c; --card:#fffcf7;
+  --line:#e7e0d5; --serve:#0f766e; --accent:#b45309;
+  font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  color:var(--ink); background:var(--bg);
+}
+* { box-sizing:border-box; }
+body {
+  max-width:1120px; margin:0 auto; padding:2.5rem 1.25rem 4rem;
+  background:
+    radial-gradient(1200px 500px at 10% -10%, #fde68a55, transparent 60%),
+    radial-gradient(900px 400px at 100% 0%, #a7f3d055, transparent 55%),
+    var(--bg);
+}
+.eyebrow {
+  font-family:ui-sans-serif,system-ui,sans-serif; font-size:.72rem;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--accent);
+  font-weight:700; margin:0 0 .6rem;
+}
+h1 {
+  font-size:clamp(2rem,4vw,2.75rem); line-height:1.1; margin:0 0 .75rem;
+  letter-spacing:-.03em; max-width:18ch;
+}
+.lead { color:var(--muted); font-size:1.05rem; line-height:1.55; max-width:46rem; }
+.muted { color:var(--muted); }
+.sans { font-family:ui-sans-serif,system-ui,sans-serif; }
+.kpi {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  gap:.85rem; margin:1.75rem 0;
+}
+.card {
+  background:var(--card); border:1px solid var(--line); border-radius:4px;
+  padding:1rem 1.05rem;
+}
+.card span {
+  display:block; font-family:ui-sans-serif,system-ui,sans-serif;
+  font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+}
+.card b { display:block; font-size:1.65rem; margin-top:.35rem; letter-spacing:-.02em; }
+.card.insight small { display:block; margin-top:.35rem; color:var(--muted); font-size:.85rem; }
+.card.insight b { color:var(--accent); }
+section { margin-top:2.75rem; }
+h2 { font-size:1.45rem; margin:0 0 .4rem; letter-spacing:-.02em; }
+h3 { font-size:.95rem; margin:1.2rem 0 .45rem; font-family:ui-sans-serif,system-ui,sans-serif; }
+.pill {
+  display:inline-block; font-family:ui-sans-serif,system-ui,sans-serif;
+  font-size:.75rem; padding:.25rem .55rem; margin:.15rem .2rem .15rem 0;
+  border:1px solid var(--line); border-radius:999px; background:#fff;
+}
+.cov-grid {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:.75rem; margin-top:1rem;
+}
+.cov {
+  border:1px solid var(--line); border-radius:4px; padding:.85rem .9rem;
+  background:var(--card); font-family:ui-sans-serif,system-ui,sans-serif;
+}
+.cov.ok { border-color:#99f6e4; background:#f0fdfa; }
+.cov.todo { opacity:.72; }
+.cov-top { display:flex; justify-content:space-between; gap:.5rem; align-items:start; }
+.detail { font-size:.82rem; color:var(--muted); margin-top:.35rem; }
+.badge {
+  font-size:.65rem; letter-spacing:.08em; text-transform:uppercase;
+  padding:.15rem .4rem; border-radius:999px; font-weight:700;
+  font-family:ui-sans-serif,system-ui,sans-serif;
+}
+.badge.ok { background:#ccfbf1; color:#0f766e; }
+.badge.todo { background:#f5f5f4; color:#78716c; }
+.row {
+  display:grid; grid-template-columns:minmax(10rem,16rem) 1fr minmax(14rem,22rem);
+  gap:.75rem; align-items:center; margin:.45rem 0;
+  font-family:ui-sans-serif,system-ui,sans-serif;
+}
+.lbl { font-size:.72rem; color:var(--muted); }
+.track { background:#e7e5e4; height:10px; border-radius:999px; overflow:hidden; }
+.fill { height:100%; border-radius:999px; }
+.val { font-size:.72rem; color:#57534e; }
+.table-wrap {
+  overflow-x:auto; border:1px solid var(--line); border-radius:4px; background:var(--card);
+}
+table {
+  width:100%; border-collapse:collapse; font-size:.78rem;
+  font-family:ui-sans-serif,system-ui,sans-serif;
+}
+th, td {
+  padding:.5rem .55rem; text-align:left; border-bottom:1px solid #f5f5f4; white-space:nowrap;
+}
+th {
+  background:#fafaf9; font-size:.65rem; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--muted);
+}
+.mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.92em; }
+pre.mono {
+  background:var(--card); border:1px solid var(--line); padding:1rem;
+  border-radius:4px; overflow:auto; font-size:.78rem; line-height:1.45;
+}
+a { color:var(--serve); }
+footer {
+  margin-top:3rem; font-size:.78rem; color:#a8a29e;
+  font-family:ui-sans-serif,system-ui,sans-serif;
+}
+@media (max-width:800px) { .row { grid-template-columns:1fr; gap:.25rem; } }
+</style>
 </head>
 <body>
-  <p style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.12em;color:#4f46e5;font-weight:600;">KV Cache App · Inference benchmark</p>
-  <h1>Executive report: memory model ↔ measured latency</h1>
-  <p class="lead">Two benchmark tiers: <strong>model layer</strong> (isolated GPU, KV math, prefill/decode) vs <strong>serving layer</strong> (HTTP, concurrency, prefix cache). Links GQA KV sizing to measured TTFT. 1.1× TTFT reduction (serving, warm vs cold @ 10k). See <code>docs/LAYERS.md</code>.</p>
+  <p class="eyebrow">KV Cache App · inference benchmark suite</p>
+  <h1>What we measure, and what the numbers say</h1>
+  <p class="lead">
+    Two tiers: <strong>model layer</strong> (isolated GPU — KV math, prefill, decode)
+    and <strong>serving layer</strong> (vLLM / API — concurrency, prefix cache, client TTFT).
+    Live runs on Modal + Fireworks; DO GPU droplet remains optional.
+  </p>
 
   <div class="kpi">
-    <div class="card"><span>Total runs</span><b>23</b></div>
+    <div class="card"><span>Total runs</span><b>50</b></div>
+    <div class="card"><span>Live runs</span><b>43</b></div>
     <div class="card"><span>Model layer</span><b>8</b></div>
-    <div class="card"><span>Serving layer</span><b>15</b></div>
-    <div class="card"><span>GQA vs dense</span><b>7×</b></div>
+    <div class="card"><span>Serving layer</span><b>42</b></div>
+    <div class="card"><span>Providers</span><b>3</b></div>
+    <div class="card"><span>GQA savings</span><b>7×</b></div>
   </div>
 
   <section>
-    <h2>Model layer — architecture &amp; KV (batch=1, no API)</h2>
-    <p class="lead">Isolated forward/generate: prefill TTFT, decode tok/s, modeled KV GiB, peak GPU memory. <strong>Modal</strong> or single-process transformers/vLLM.</p>
-    <div class="row">
-          <span class="lbl">S≈1024</span>
-          <div class="bar" style="width:14.9%;background:#6366f1"></div>
-          <span class="val">1254 ms · KV 0.0132 GiB · peak 1.232 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈1024</span>
-          <div class="bar" style="width:10.2%;background:#6366f1"></div>
-          <span class="val">856 ms · KV 0.0615 GiB · peak 14.547 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈8192</span>
-          <div class="bar" style="width:100.0%;background:#6366f1"></div>
-          <span class="val">8418 ms · KV 0.0952 GiB · peak 9.323 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈8192</span>
-          <div class="bar" style="width:24.2%;background:#6366f1"></div>
-          <span class="val">2040 ms · KV 0.4443 GiB · peak 17.006 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:31.2%;background:#6366f1"></div>
-          <span class="val">2625 ms · KV 0.5537 GiB · peak 17.709 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:31.4%;background:#6366f1"></div>
-          <span class="val">2645 ms · KV 0.5742 GiB · peak 17.709 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:10.1%;background:#6366f1"></div>
-          <span class="val">848 ms · KV 0.1187 GiB · peak 3.965 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:3.3%;background:#6366f1"></div>
-          <span class="val">280 ms · KV 0.123 GiB · peak 3.964 GiB</span>
-        </div>
+    <h2>Coverage</h2>
+    <p class="lead muted">Green = live data on hand. Grey = harness ready, not run yet here.</p>
+    <div class="cov-grid"><div class="cov ok"><div class="cov-top"><b>Model · KV math</b><span class="badge ok">live</span></div><div class="detail">GQA vs dense GiB vs S</div></div><div class="cov ok"><div class="cov-top"><b>Model · Prefill TTFT</b><span class="badge ok">live</span></div><div class="detail">Modal transformers, batch=1</div></div><div class="cov ok"><div class="cov-top"><b>Model · Decode tok/s</b><span class="badge ok">live</span></div><div class="detail">Isolated generate path</div></div><div class="cov ok"><div class="cov-top"><b>Serving · vLLM batching</b><span class="badge ok">live</span></div><div class="detail">Modal A100 continuous batch</div></div><div class="cov ok"><div class="cov-top"><b>Serving · Prefix cache</b><span class="badge ok">live</span></div><div class="detail">cold vs warm_prefix</div></div><div class="cov ok"><div class="cov-top"><b>Serving · Concurrency</b><span class="badge ok">live</span></div><div class="detail">conc ≥ 4</div></div><div class="cov ok"><div class="cov-top"><b>Serving · Hosted API</b><span class="badge ok">live</span></div><div class="detail">Fireworks OpenAI-compatible</div></div><div class="cov todo"><div class="cov-top"><b>Serving · DO GPU droplet</b><span class="badge todo">todo</span></div><div class="detail">vLLM on DigitalOcean (optional)</div></div></div>
   </section>
 
   <section>
-    <h2>Serving layer — what clients see (API / vLLM under load)</h2>
-    <p class="lead">HTTP endpoints, concurrency, prefix-cache hits (<code>cached_prompt_tokens</code>), queueing. vLLM+llmperf, Fireworks, DO Dedicated.</p>
-    <div class="row">
-          <span class="lbl">S≈1024</span>
-          <div class="bar" style="width:25.3%;background:#0d9488"></div>
-          <span class="val">1044 ms · KV 0.0538 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈1024</span>
-          <div class="bar" style="width:5.3%;background:#0d9488"></div>
-          <span class="val">218 ms · KV 0.055 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈1024</span>
-          <div class="bar" style="width:5.9%;background:#0d9488"></div>
-          <span class="val">245 ms · KV 0.055 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈8192</span>
-          <div class="bar" style="width:34.5%;background:#0d9488"></div>
-          <span class="val">1420 ms · KV 0.441 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:26.7%;background:#0d9488"></div>
-          <span class="val">1099 ms · KV 0.5357 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:33.5%;background:#0d9488"></div>
-          <span class="val">1379 ms · KV 0.5396 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:31.6%;background:#0d9488"></div>
-          <span class="val">1304 ms · KV 0.5361 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:43.3%;background:#0d9488"></div>
-          <span class="val">1785 ms · KV 0.551 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:54.4%;background:#0d9488"></div>
-          <span class="val">2240 ms · KV 0.551 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:100.0%;background:#0d9488"></div>
-          <span class="val">4120 ms · KV 0.551 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:43.9%;background:#0d9488"></div>
-          <span class="val">1810 ms · KV 0.551 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:9.3%;background:#0d9488"></div>
-          <span class="val">385 ms · KV 0.551 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:46.6%;background:#0d9488"></div>
-          <span class="val">1920 ms · KV 0.551 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:10.2%;background:#0d9488"></div>
-          <span class="val">420 ms · KV 0.551 GiB</span>
-        </div><div class="row">
-          <span class="lbl">S≈10240</span>
-          <div class="bar" style="width:48.1%;background:#0d9488"></div>
-          <span class="val">1980 ms · KV 0.551 GiB</span>
-        </div>
+    <h2>Headline insights</h2>
+    <div class="kpi"><div class="card insight"><span>Prefill ∝ context</span><b>1.5×</b><small>Model TTFT 1024→10240 tok</small></div><div class="card insight"><span>Prefix cache win</span><b>2.0×</b><small>Cold → warm TTFT (matched)</small></div><div class="card insight"><span>GQA vs dense KV</span><b>7×</b><small>Qwen2.5-7B n_kv=4</small></div><div class="card insight"><span>Live measurements</span><b>43</b><small>of 50 rows</small></div></div>
+  </section>
+
+  <section>
+    <h2>Inventory</h2>
+    <h3>Providers</h3>
+    <div><span class="pill">modal · 35</span> <span class="pill">fireworks · 8</span> <span class="pill">digitalocean_gpu · 7</span></div>
+    <h3>Models</h3>
+    <div><span class="pill">Qwen2.5-7B · 42</span> <span class="pill">Qwen2.5-0.5B · 4</span> <span class="pill">qwen3p7-plus · 4</span></div>
+    <h3>Workloads</h3>
+    <div><span class="pill">single · 35</span> <span class="pill">warm_prefix · 9</span> <span class="pill">cold_prefix · 6</span></div>
+  </section>
+
+  <section>
+    <h2>Model layer — architecture &amp; KV</h2>
+    <p class="lead muted">Batch=1, no HTTP. TTFT ≈ prefill. Links latency to modeled GQA KV GiB.</p>
+    <div class="row"><span class="lbl">Qwen2.5-0.5B · S=1024</span><div class="track"><div class="fill" style="width:14.9%;background:#4f46e5"></div></div><span class="val">1254 ms · 37.76 tok/s · KV 0.0132 · cache 0 · peak 1.232 GiB</span></div>
+<div class="row"><span class="lbl">Qwen2.5-7B · S=1024</span><div class="track"><div class="fill" style="width:10.2%;background:#4f46e5"></div></div><span class="val">856 ms · 31.31 tok/s · KV 0.0615 · cache 0 · peak 14.547 GiB</span></div>
+<div class="row"><span class="lbl">Qwen2.5-0.5B · S=8192</span><div class="track"><div class="fill" style="width:100.0%;background:#4f46e5"></div></div><span class="val">8418 ms · 35.62 tok/s · KV 0.0952 · cache 0 · peak 9.323 GiB</span></div>
+<div class="row"><span class="lbl">Qwen2.5-7B · S=8192</span><div class="track"><div class="fill" style="width:24.2%;background:#4f46e5"></div></div><span class="val">2040 ms · 26.64 tok/s · KV 0.4443 · cache 0 · peak 17.006 GiB</span></div>
+<div class="row"><span class="lbl">Qwen2.5-7B · S=10240</span><div class="track"><div class="fill" style="width:31.2%;background:#4f46e5"></div></div><span class="val">2625 ms · 26.19 tok/s · KV 0.5537 · cache 0 · peak 17.709 GiB</span></div>
+<div class="row"><span class="lbl">Qwen2.5-7B · S=10240</span><div class="track"><div class="fill" style="width:31.4%;background:#4f46e5"></div></div><span class="val">2645 ms · 25.44 tok/s · KV 0.5742 · cache 0 · peak 17.709 GiB</span></div>
+<div class="row"><span class="lbl">Qwen2.5-0.5B · S=10240</span><div class="track"><div class="fill" style="width:10.1%;background:#4f46e5"></div></div><span class="val">848 ms · 68.31 tok/s · KV 0.1187 · cache 0 · peak 3.965 GiB</span></div>
+<div class="row"><span class="lbl">Qwen2.5-0.5B · S=10240</span><div class="track"><div class="fill" style="width:3.3%;background:#4f46e5"></div></div><span class="val">280 ms · 57.72 tok/s · KV 0.123 · cache 0 · peak 3.964 GiB</span></div>
+  </section>
+
+  <section>
+    <h2>Serving layer — clients &amp; continuous batching</h2>
+    <p class="lead muted">vLLM on Modal, Fireworks API, optional DO GPU. Watch warm_prefix vs cold_prefix and concurrency.</p>
+    <div class="row"><span class="lbl">modal · Qwen2.5-7B · S=512 · c=1 · single</span><div class="track"><div class="fill" style="width:13.0%;background:#0f766e"></div></div><span class="val">950 ms · 60.18 tok/s · KV 0.0287 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=512 · c=4 · single</span><div class="track"><div class="fill" style="width:3.3%;background:#0f766e"></div></div><span class="val">245 ms · 233.3 tok/s · KV 0.0287 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=512 · c=8 · single</span><div class="track"><div class="fill" style="width:1.7%;background:#0f766e"></div></div><span class="val">125 ms · 456.51 tok/s · KV 0.0287 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=1 · single</span><div class="track"><div class="fill" style="width:23.0%;background:#0f766e"></div></div><span class="val">1684 ms · 67.91 tok/s · KV 0.0573 · cache 0</span></div>
+<div class="row"><span class="lbl">firewor · qwen3p7-pl · S=1024 · c=1 · single</span><div class="track"><div class="fill" style="width:14.2%;background:#0f766e"></div></div><span class="val">1044 ms · 128000000.0 tok/s · KV 0.0538 · cache 0</span></div>
+<div class="row"><span class="lbl">firewor · Qwen2.5-7B · S=1024 · c=1 · single</span><div class="track"><div class="fill" style="width:3.3%;background:#0f766e"></div></div><span class="val">245 ms · 71.4 tok/s · KV 0.055 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=4 · single</span><div class="track"><div class="fill" style="width:6.2%;background:#0f766e"></div></div><span class="val">455 ms · 251.44 tok/s · KV 0.0573 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=8 · single</span><div class="track"><div class="fill" style="width:3.2%;background:#0f766e"></div></div><span class="val">234 ms · 489.56 tok/s · KV 0.0573 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=2048 · c=1 · single</span><div class="track"><div class="fill" style="width:24.8%;background:#0f766e"></div></div><span class="val">1816 ms · 66.53 tok/s · KV 0.1145 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=2048 · c=4 · single</span><div class="track"><div class="fill" style="width:6.8%;background:#0f766e"></div></div><span class="val">501 ms · 241.21 tok/s · KV 0.1145 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=2048 · c=8 · single</span><div class="track"><div class="fill" style="width:3.7%;background:#0f766e"></div></div><span class="val">269 ms · 449.01 tok/s · KV 0.1145 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="width:12.1%;background:#0f766e"></div></div><span class="val">885 ms · 140.59 tok/s · KV 0.2362 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · single</span><div class="track"><div class="fill" style="width:27.4%;background:#0f766e"></div></div><span class="val">2004 ms · 62.01 tok/s · KV 0.2289 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="width:8.4%;background:#0f766e"></div></div><span class="val">615 ms · 201.48 tok/s · KV 0.2032 · cache 3773</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=4 · single</span><div class="track"><div class="fill" style="width:7.9%;background:#0f766e"></div></div><span class="val">580 ms · 214.47 tok/s · KV 0.2289 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=4 · warm_prefix</span><div class="track"><div class="fill" style="width:6.5%;background:#0f766e"></div></div><span class="val">478 ms · 258.87 tok/s · KV 0.2032 · cache 3773</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=8 · single</span><div class="track"><div class="fill" style="width:4.5%;background:#0f766e"></div></div><span class="val">332 ms · 374.63 tok/s · KV 0.2289 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="width:13.4%;background:#0f766e"></div></div><span class="val">980 ms · 128.7 tok/s · KV 0.4724 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=1 · single</span><div class="track"><div class="fill" style="width:29.6%;background:#0f766e"></div></div><span class="val">2172 ms · 58.06 tok/s · KV 0.4577 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="width:8.8%;background:#0f766e"></div></div><span class="val">642 ms · 196.03 tok/s · KV 0.4091 · cache 7629</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=4 · single</span><div class="track"><div class="fill" style="width:10.1%;background:#0f766e"></div></div><span class="val">741 ms · 170.21 tok/s · KV 0.4577 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=4 · warm_prefix</span><div class="track"><div class="fill" style="width:6.8%;background:#0f766e"></div></div><span class="val">497 ms · 253.28 tok/s · KV 0.4091 · cache 7629</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=8 · single</span><div class="track"><div class="fill" style="width:6.2%;background:#0f766e"></div></div><span class="val">454 ms · 277.86 tok/s · KV 0.4577 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="width:11.6%;background:#0f766e"></div></div><span class="val">851 ms · 148.62 tok/s · KV 0.5905 · cache 0</span></div>
+<div class="row"><span class="lbl">firewor · qwen3p7-pl · S=10240 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="width:18.8%;background:#0f766e"></div></div><span class="val">1379 ms · 128000000.0 tok/s · KV 0.5396 · cache 0</span></div>
+<div class="row"><span class="lbl">firewor · Qwen2.5-7B · S=10240 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="width:26.2%;background:#0f766e"></div></div><span class="val">1920 ms · 74.1 tok/s · KV 0.551 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=1 · single</span><div class="track"><div class="fill" style="width:100.0%;background:#0f766e"></div></div><span class="val">7328 ms · 66.69 tok/s · KV 0.5722 · cache 0</span></div>
+<div class="row"><span class="lbl">firewor · qwen3p7-pl · S=10240 · c=1 · single</span><div class="track"><div class="fill" style="width:15.0%;background:#0f766e"></div></div><span class="val">1099 ms · 128000000.0 tok/s · KV 0.5357 · cache 0</span></div>
+<div class="row"><span class="lbl">firewor · Qwen2.5-7B · S=10240 · c=1 · single</span><div class="track"><div class="fill" style="width:27.0%;background:#0f766e"></div></div><span class="val">1980 ms · 72.5 tok/s · KV 0.551 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="width:8.9%;background:#0f766e"></div></div><span class="val">654 ms · 193.19 tok/s · KV 0.512 · cache 9555</span></div>
+<div class="row"><span class="lbl">firewor · qwen3p7-pl · S=10240 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="width:17.8%;background:#0f766e"></div></div><span class="val">1304 ms · 128000000.0 tok/s · KV 0.5361 · cache 0</span></div>
+<div class="row"><span class="lbl">firewor · Qwen2.5-7B · S=10240 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="width:5.7%;background:#0f766e"></div></div><span class="val">420 ms · 76.3 tok/s · KV 0.551 · cache 9984</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=4 · single</span><div class="track"><div class="fill" style="width:9.2%;background:#0f766e"></div></div><span class="val">671 ms · 188.42 tok/s · KV 0.5722 · cache 0</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=4 · warm_prefix</span><div class="track"><div class="fill" style="width:6.9%;background:#0f766e"></div></div><span class="val">504 ms · 250.43 tok/s · KV 0.512 · cache 9555</span></div>
+<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=8 · single</span><div class="track"><div class="fill" style="width:16.1%;background:#0f766e"></div></div><span class="val">1179 ms · 414.59 tok/s · KV 0.5722 · cache 0</span></div>
   </section>
 
   <section>
     <h2>Full results matrix</h2>
-    <table>
-      <thead><tr>
-        <th>Stack</th><th>Phase</th><th>Layer</th><th>Provider</th><th>Input</th><th>Workload</th>
-        <th>TTFT p50</th><th>Tok/s</th><th>Cached</th><th>KV GiB</th>
-      </tr></thead>
-      <tbody><tr>
-          <td>model</td>
-          <td>A</td>
-          <td>inference</td>
-          <td>modal</td>
-          <td class="mono">1024</td>
-          <td>single</td>
-          <td class="mono">1254</td>
-          <td class="mono">37.76</td>
-          <td class="mono">0</td>
-          <td class="mono">0.0132</td>
-        </tr><tr>
-          <td>model</td>
-          <td>A</td>
-          <td>inference</td>
-          <td>modal</td>
-          <td class="mono">1024</td>
-          <td>single</td>
-          <td class="mono">856</td>
-          <td class="mono">31.31</td>
-          <td class="mono">0</td>
-          <td class="mono">0.0615</td>
-        </tr><tr>
-          <td>model</td>
-          <td>A</td>
-          <td>inference</td>
-          <td>modal</td>
-          <td class="mono">10240</td>
-          <td>single</td>
-          <td class="mono">2625</td>
-          <td class="mono">26.19</td>
-          <td class="mono">0</td>
-          <td class="mono">0.5537</td>
-        </tr><tr>
-          <td>model</td>
-          <td>A</td>
-          <td>inference</td>
-          <td>modal</td>
-          <td class="mono">10240</td>
-          <td>single</td>
-          <td class="mono">2645</td>
-          <td class="mono">25.44</td>
-          <td class="mono">0</td>
-          <td class="mono">0.5742</td>
-        </tr><tr>
-          <td>model</td>
-          <td>A</td>
-          <td>inference</td>
-          <td>modal</td>
-          <td class="mono">10240</td>
-          <td>single</td>
-          <td class="mono">848</td>
-          <td class="mono">68.31</td>
-          <td class="mono">0</td>
-          <td class="mono">0.1187</td>
-        </tr><tr>
-          <td>model</td>
-          <td>A</td>
-          <td>inference</td>
-          <td>modal</td>
-          <td class="mono">10240</td>
-          <td>single</td>
-          <td class="mono">280</td>
-          <td class="mono">57.72</td>
-          <td class="mono">0</td>
-          <td class="mono">0.123</td>
-        </tr><tr>
-          <td>model</td>
-          <td>A</td>
-          <td>inference</td>
-          <td>modal</td>
-          <td class="mono">8192</td>
-          <td>single</td>
-          <td class="mono">8418</td>
-          <td class="mono">35.62</td>
-          <td class="mono">0</td>
-          <td class="mono">0.0952</td>
-        </tr><tr>
-          <td>model</td>
-          <td>A</td>
-          <td>inference</td>
-          <td>modal</td>
-          <td class="mono">8192</td>
-          <td>single</td>
-          <td class="mono">2040</td>
-          <td class="mono">26.64</td>
-          <td class="mono">0</td>
-          <td class="mono">0.4443</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>A</td>
-          <td>engine</td>
-          <td>digitalocean_gpu</td>
-          <td class="mono">1024</td>
-          <td>single</td>
-          <td class="mono">218</td>
-          <td class="mono">80.6</td>
-          <td class="mono">0</td>
-          <td class="mono">0.055</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>A</td>
-          <td>engine</td>
-          <td>digitalocean_gpu</td>
-          <td class="mono">10240</td>
-          <td>single</td>
-          <td class="mono">1785</td>
-          <td class="mono">83.3</td>
-          <td class="mono">0</td>
-          <td class="mono">0.551</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>A</td>
-          <td>engine</td>
-          <td>digitalocean_gpu</td>
-          <td class="mono">10240</td>
-          <td>single</td>
-          <td class="mono">2240</td>
-          <td class="mono">70.4</td>
-          <td class="mono">0</td>
-          <td class="mono">0.551</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>A</td>
-          <td>engine</td>
-          <td>digitalocean_gpu</td>
-          <td class="mono">10240</td>
-          <td>single</td>
-          <td class="mono">4120</td>
-          <td class="mono">54.1</td>
-          <td class="mono">0</td>
-          <td class="mono">0.551</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>A</td>
-          <td>engine</td>
-          <td>digitalocean_gpu</td>
-          <td class="mono">8192</td>
-          <td>single</td>
-          <td class="mono">1420</td>
-          <td class="mono">82.6</td>
-          <td class="mono">0</td>
-          <td class="mono">0.441</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>B</td>
-          <td>kv_cache</td>
-          <td>fireworks</td>
-          <td class="mono">10240</td>
-          <td>cold_prefix</td>
-          <td class="mono">1379</td>
-          <td class="mono">128000000.0</td>
-          <td class="mono">0</td>
-          <td class="mono">0.5396</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>B</td>
-          <td>kv_cache</td>
-          <td>fireworks</td>
-          <td class="mono">10240</td>
-          <td>warm_prefix</td>
-          <td class="mono">1304</td>
-          <td class="mono">128000000.0</td>
-          <td class="mono">0</td>
-          <td class="mono">0.5361</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>B</td>
-          <td>kv_cache</td>
-          <td>digitalocean_gpu</td>
-          <td class="mono">10240</td>
-          <td>cold_prefix</td>
-          <td class="mono">1810</td>
-          <td class="mono">82.0</td>
-          <td class="mono">0</td>
-          <td class="mono">0.551</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>B</td>
-          <td>kv_cache</td>
-          <td>digitalocean_gpu</td>
-          <td class="mono">10240</td>
-          <td>warm_prefix</td>
-          <td class="mono">385</td>
-          <td class="mono">84.7</td>
-          <td class="mono">10112</td>
-          <td class="mono">0.551</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>B</td>
-          <td>kv_cache</td>
-          <td>fireworks</td>
-          <td class="mono">10240</td>
-          <td>cold_prefix</td>
-          <td class="mono">1920</td>
-          <td class="mono">74.1</td>
-          <td class="mono">0</td>
-          <td class="mono">0.551</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>B</td>
-          <td>kv_cache</td>
-          <td>fireworks</td>
-          <td class="mono">10240</td>
-          <td>warm_prefix</td>
-          <td class="mono">420</td>
-          <td class="mono">76.3</td>
-          <td class="mono">9984</td>
-          <td class="mono">0.551</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>C</td>
-          <td>api</td>
-          <td>fireworks</td>
-          <td class="mono">1024</td>
-          <td>single</td>
-          <td class="mono">1044</td>
-          <td class="mono">128000000.0</td>
-          <td class="mono">0</td>
-          <td class="mono">0.0538</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>C</td>
-          <td>api</td>
-          <td>fireworks</td>
-          <td class="mono">1024</td>
-          <td>single</td>
-          <td class="mono">245</td>
-          <td class="mono">71.4</td>
-          <td class="mono">0</td>
-          <td class="mono">0.055</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>C</td>
-          <td>api</td>
-          <td>fireworks</td>
-          <td class="mono">10240</td>
-          <td>single</td>
-          <td class="mono">1099</td>
-          <td class="mono">128000000.0</td>
-          <td class="mono">0</td>
-          <td class="mono">0.5357</td>
-        </tr><tr>
-          <td>serving</td>
-          <td>C</td>
-          <td>api</td>
-          <td>fireworks</td>
-          <td class="mono">10240</td>
-          <td>single</td>
-          <td class="mono">1980</td>
-          <td class="mono">72.5</td>
-          <td class="mono">0</td>
-          <td class="mono">0.551</td>
-        </tr></tbody>
-    </table>
+    <p class="lead muted">50 rows · stack → provider → model → S → concurrency</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th><th>Stack</th><th>Provider</th><th>Model</th><th>Engine</th>
+            <th>In</th><th>Out</th><th>Conc</th><th>Workload</th>
+            <th>TTFT p50</th><th>Tok/s</th><th>Cached</th>
+            <th>KV GQA</th><th>KV dense</th><th>Peak GPU</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+Tesla T4</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1254</td><td class="mono">37.76</td><td class="mono">0</td><td class="mono">0.0132</td><td class="mono">0.0923</td><td class="mono">1.232</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+Tesla T4</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">8418</td><td class="mono">35.62</td><td class="mono">0</td><td class="mono">0.0952</td><td class="mono">0.6665</td><td class="mono">9.323</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">848</td><td class="mono">68.31</td><td class="mono">0</td><td class="mono">0.1187</td><td class="mono">0.8306</td><td class="mono">3.965</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">1</td><td>single</td><td class="mono">280</td><td class="mono">57.72</td><td class="mono">0</td><td class="mono">0.123</td><td class="mono">0.8613</td><td class="mono">3.964</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">856</td><td class="mono">31.31</td><td class="mono">0</td><td class="mono">0.0615</td><td class="mono">0.4307</td><td class="mono">14.547</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2040</td><td class="mono">26.64</td><td class="mono">0</td><td class="mono">0.4443</td><td class="mono">3.1104</td><td class="mono">17.006</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2625</td><td class="mono">26.19</td><td class="mono">0</td><td class="mono">0.5537</td><td class="mono">3.876</td><td class="mono">17.709</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">1</td><td>single</td><td class="mono">2645</td><td class="mono">25.44</td><td class="mono">0</td><td class="mono">0.5742</td><td class="mono">4.0195</td><td class="mono">17.709</td></tr>
+<tr><td><span class="badge todo">sample</span></td><td>serving</td><td>digitalocean_gpu</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM-0.8.x</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">218</td><td class="mono">80.6</td><td class="mono">0</td><td class="mono">0.055</td><td class="mono">0.384</td><td class="mono">—</td></tr>
+<tr><td><span class="badge todo">sample</span></td><td>serving</td><td>digitalocean_gpu</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM-0.8.x</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1420</td><td class="mono">82.6</td><td class="mono">0</td><td class="mono">0.441</td><td class="mono">3.087</td><td class="mono">—</td></tr>
+<tr><td><span class="badge todo">sample</span></td><td>serving</td><td>digitalocean_gpu</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM-0.8.x</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">1810</td><td class="mono">82.0</td><td class="mono">0</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
+<tr><td><span class="badge todo">sample</span></td><td>serving</td><td>digitalocean_gpu</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM-0.8.x</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1785</td><td class="mono">83.3</td><td class="mono">0</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
+<tr><td><span class="badge todo">sample</span></td><td>serving</td><td>digitalocean_gpu</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM-0.8.x</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">385</td><td class="mono">84.7</td><td class="mono">10112</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
+<tr><td><span class="badge todo">sample</span></td><td>serving</td><td>digitalocean_gpu</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM-0.8.x</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">8</td><td>single</td><td class="mono">2240</td><td class="mono">70.4</td><td class="mono">0</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
+<tr><td><span class="badge todo">sample</span></td><td>serving</td><td>digitalocean_gpu</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM-0.8.x</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">32</td><td>single</td><td class="mono">4120</td><td class="mono">54.1</td><td class="mono">0</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">Qwen2.5-7B</td><td class="mono">fireworks-serverless</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">245</td><td class="mono">71.4</td><td class="mono">0</td><td class="mono">0.055</td><td class="mono">0.384</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">Qwen2.5-7B</td><td class="mono">fireworks-serverless</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">1920</td><td class="mono">74.1</td><td class="mono">0</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">Qwen2.5-7B</td><td class="mono">fireworks-serverless</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1980</td><td class="mono">72.5</td><td class="mono">0</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">Qwen2.5-7B</td><td class="mono">fireworks-serverless</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">420</td><td class="mono">76.3</td><td class="mono">9984</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">qwen3p7-plus</td><td class="mono">openai-compatible-api</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1044</td><td class="mono">128000000.0</td><td class="mono">0</td><td class="mono">0.0538</td><td class="mono">0.3765</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">qwen3p7-plus</td><td class="mono">openai-compatible-api</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">1379</td><td class="mono">128000000.0</td><td class="mono">0</td><td class="mono">0.5396</td><td class="mono">3.7773</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">qwen3p7-plus</td><td class="mono">openai-compatible-api</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1099</td><td class="mono">128000000.0</td><td class="mono">0</td><td class="mono">0.5357</td><td class="mono">3.7496</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">qwen3p7-plus</td><td class="mono">openai-compatible-api</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">1304</td><td class="mono">128000000.0</td><td class="mono">0</td><td class="mono">0.5361</td><td class="mono">3.753</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">512</td><td class="mono">64</td><td class="mono">1</td><td>single</td><td class="mono">950</td><td class="mono">60.18</td><td class="mono">0</td><td class="mono">0.0287</td><td class="mono">0.2008</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">512</td><td class="mono">64</td><td class="mono">4</td><td>single</td><td class="mono">245</td><td class="mono">233.3</td><td class="mono">0</td><td class="mono">0.0287</td><td class="mono">0.2008</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">512</td><td class="mono">64</td><td class="mono">8</td><td>single</td><td class="mono">125</td><td class="mono">456.51</td><td class="mono">0</td><td class="mono">0.0287</td><td class="mono">0.2008</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1684</td><td class="mono">67.91</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.4008</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">455</td><td class="mono">251.44</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.4008</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">234</td><td class="mono">489.56</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.4008</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">2048</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1816</td><td class="mono">66.53</td><td class="mono">0</td><td class="mono">0.1145</td><td class="mono">0.8015</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">2048</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">501</td><td class="mono">241.21</td><td class="mono">0</td><td class="mono">0.1145</td><td class="mono">0.8015</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">2048</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">269</td><td class="mono">449.01</td><td class="mono">0</td><td class="mono">0.1145</td><td class="mono">0.8015</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">885</td><td class="mono">140.59</td><td class="mono">0</td><td class="mono">0.2362</td><td class="mono">1.6531</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2004</td><td class="mono">62.01</td><td class="mono">0</td><td class="mono">0.2289</td><td class="mono">1.6023</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">615</td><td class="mono">201.48</td><td class="mono">3773</td><td class="mono">0.2032</td><td class="mono">1.4225</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">580</td><td class="mono">214.47</td><td class="mono">0</td><td class="mono">0.2289</td><td class="mono">1.6023</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">4</td><td>warm_prefix</td><td class="mono">478</td><td class="mono">258.87</td><td class="mono">3773</td><td class="mono">0.2032</td><td class="mono">1.4225</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">332</td><td class="mono">374.63</td><td class="mono">0</td><td class="mono">0.2289</td><td class="mono">1.6023</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">980</td><td class="mono">128.7</td><td class="mono">0</td><td class="mono">0.4724</td><td class="mono">3.3066</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2172</td><td class="mono">58.06</td><td class="mono">0</td><td class="mono">0.4577</td><td class="mono">3.2042</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">642</td><td class="mono">196.03</td><td class="mono">7629</td><td class="mono">0.4091</td><td class="mono">2.864</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">741</td><td class="mono">170.21</td><td class="mono">0</td><td class="mono">0.4577</td><td class="mono">3.2042</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">4</td><td>warm_prefix</td><td class="mono">497</td><td class="mono">253.28</td><td class="mono">7629</td><td class="mono">0.4091</td><td class="mono">2.864</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">454</td><td class="mono">277.86</td><td class="mono">0</td><td class="mono">0.4577</td><td class="mono">3.2042</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">851</td><td class="mono">148.62</td><td class="mono">0</td><td class="mono">0.5905</td><td class="mono">4.1332</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">1</td><td>single</td><td class="mono">7328</td><td class="mono">66.69</td><td class="mono">0</td><td class="mono">0.5722</td><td class="mono">4.0057</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">654</td><td class="mono">193.19</td><td class="mono">9555</td><td class="mono">0.512</td><td class="mono">3.584</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">671</td><td class="mono">188.42</td><td class="mono">0</td><td class="mono">0.5722</td><td class="mono">4.0057</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">4</td><td>warm_prefix</td><td class="mono">504</td><td class="mono">250.43</td><td class="mono">9555</td><td class="mono">0.512</td><td class="mono">3.584</td><td class="mono">—</td></tr>
+<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">8</td><td>single</td><td class="mono">1179</td><td class="mono">414.59</td><td class="mono">0</td><td class="mono">0.5722</td><td class="mono">4.0057</td><td class="mono">—</td></tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <section>
-    <h2>How to reproduce</h2>
-    <pre class="mono" style="background:#fff;border:1px solid #e2e8f0;padding:1rem;border-radius:8px;overflow:auto;font-size:0.8rem;">
-# API (no GPU)
-pip install -r benchmarks/requirements.txt
-export OPENAI_API_KEY=... OPENAI_BASE_URL=https://api.fireworks.ai/inference/v1
-python benchmarks/scripts/run_api_benchmark.py
+    <h2>How to grow the matrix</h2>
+    <pre class="mono"># Model layer (isolated GPU)
+npm run benchmark:modal
 
-# Engine (DigitalOcean GPU droplet)
-bash benchmarks/scripts/run_engine_benchmark.sh
+# Serving layer on Modal (vLLM + prefix cache + concurrency)
+npm run benchmark:modal:vllm
+
+# Hosted API (Fireworks)
+export OPENAI_API_KEY=... OPENAI_BASE_URL=https://api.fireworks.ai/inference/v1
+npm run benchmark:api
 
 # Regenerate this page
-python benchmarks/scripts/generate_report.py
-    </pre>
+npm run report && npm run build</pre>
   </section>
 
-  <p><a href="/">← Back to KV explorer</a></p>
-  <footer>Generated 2026-08-23 20:35 UTC · Sample data included for demo; replace with live runs via scripts.</footer>
+  <p class="sans"><a href="/">← KV explorer</a></p>
+  <footer>Generated 2026-08-23 22:20 UTC · Prefer live Modal/Fireworks rows over sample DO placeholders.</footer>
 </body>
 </html>

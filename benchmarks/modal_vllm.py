@@ -102,14 +102,23 @@ def serve_and_bench(model_id: str, quick: bool, tp: int = 1) -> list[dict]:
             ("A", "engine", 1024, 64, 4, "single"),
         ]
     else:
-        cases = [
-            ("A", "engine", 1024, 128, 1, "single"),
-            ("A", "engine", 8192, 128, 1, "single"),
-            ("A", "engine", 10240, 128, 1, "single"),
-            ("A", "engine", 10240, 128, 8, "single"),
-            ("B", "kv_cache", 10240, 128, 1, "cold_prefix"),
-            ("B", "kv_cache", 10240, 128, 1, "warm_prefix"),
-        ]
+        cases = []
+        for inp, out in [
+            (512, 64),
+            (1024, 128),
+            (2048, 128),
+            (4096, 128),
+            (8192, 128),
+            (10240, 128),
+        ]:
+            for conc in (1, 4, 8):
+                cases.append(("A", "engine", inp, out, conc, "single"))
+            if inp >= 4096:
+                cases.append(("B", "kv_cache", inp, out, 1, "cold_prefix"))
+                cases.append(("B", "kv_cache", inp, out, 1, "warm_prefix"))
+                cases.append(("B", "kv_cache", inp, out, 4, "warm_prefix"))
+        cases.append(("A", "engine", 10240, 512, 1, "single"))
+        cases.append(("A", "engine", 10240, 512, 8, "single"))
 
     rows: list[dict] = []
     for phase, layer, inp, out, conc, workload in cases:
