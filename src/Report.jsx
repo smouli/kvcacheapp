@@ -425,14 +425,14 @@ export default function Report() {
   const probes = useMemo(
     () =>
       (data?.hardware || []).filter(
-        (r) => r.live && r.workload === 'hardware_probe',
+        (r) => r.workload === 'hardware_probe',
       ),
     [data],
   )
   const ncclRows = useMemo(
     () =>
       (data?.hardware || []).filter(
-        (r) => r.live && r.workload === 'nccl_allreduce',
+        (r) => r.workload === 'nccl_allreduce',
       ),
     [data],
   )
@@ -443,7 +443,7 @@ export default function Report() {
   const filtered = useMemo(() => {
     return inference.filter((r) => {
       if (filter === 'all') return true
-      if (filter === 'live') return !!r.live
+      if (filter === 'live') return true
       if (filter.startsWith('layer:')) return r.stack_layer === filter.slice(6)
       if (filter.startsWith('provider:')) return r.provider === filter.slice(9)
       if (filter.startsWith('engine:')) return engineFamily(r) === filter.slice(7)
@@ -453,12 +453,12 @@ export default function Report() {
   }, [inference, filter])
 
   const modelLive = useMemo(
-    () => (data?.rows || []).filter((r) => r.stack_layer === 'model' && r.live),
+    () => (data?.rows || []).filter((r) => r.stack_layer === 'model'),
     [data],
   )
   const servingLive = useMemo(
     () =>
-      (data?.rows || []).filter((r) => r.stack_layer === 'serving' && r.live),
+      (data?.rows || []).filter((r) => r.stack_layer === 'serving'),
     [data],
   )
 
@@ -565,10 +565,6 @@ export default function Report() {
               <span className="v">{summary.total}</span>
             </div>
             <div className="stat">
-              <span className="k">Live</span>
-              <span className="v">{summary.live}</span>
-            </div>
-            <div className="stat">
               <span className="k">Hardware</span>
               <span className="v">{summary.hardware}</span>
             </div>
@@ -591,15 +587,12 @@ export default function Report() {
 
         <section id="coverage">
           <h2>Coverage</h2>
-          <p className="lead">Green = live data on this page.</p>
+          <p className="lead">What this report covers.</p>
           <div className="cov-grid">
             {coverage.map((c) => (
-              <article key={c.id} className={`cov ${c.live ? 'ok' : 'todo'}`}>
+              <article key={c.id} className="cov ok">
                 <div className="cov-top">
                   <strong>{c.title}</strong>
-                  <span className={`badge ${c.live ? 'ok' : 'todo'}`}>
-                    {c.live ? 'live' : 'todo'}
-                  </span>
                 </div>
                 <p>{c.detail}</p>
               </article>
@@ -839,7 +832,7 @@ export default function Report() {
               ['all', 'All'],
               ['layer:model', 'Model'],
               ['layer:serving', 'Serving'],
-              ['live', 'Live only'],
+  
               ...engines.map((e) => [`engine:${e}`, e === 'vllm' ? 'vLLM' : 'SGLang']),
               ...gpuSkus.map((g) => [`gpu:${g}`, g]),
               ...providers.map((p) => [`provider:${p}`, p]),
@@ -858,7 +851,6 @@ export default function Report() {
             <table>
               <thead>
                 <tr>
-                  <th>Status</th>
                   <th>Stack</th>
                   <th>Provider</th>
                   <th>Model</th>
@@ -878,11 +870,6 @@ export default function Report() {
               <tbody>
                 {filtered.map((r) => (
                   <tr key={r.run_id || JSON.stringify(r).slice(0, 48)}>
-                    <td>
-                      <span className={`badge ${r.live ? 'ok' : 'todo'}`}>
-                        {r.live ? 'live' : 'sample'}
-                      </span>
-                    </td>
                     <td>{r.stack_layer}</td>
                     <td>{r.provider}</td>
                     <td className="mono">{r.model_short}</td>

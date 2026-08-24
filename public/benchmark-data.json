@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-24 07:21 UTC",
+  "generated_at": "2026-08-24 07:29 UTC",
   "brand": "KV Cache",
   "summary": {
     "total": 94,
@@ -205,9 +205,9 @@
       "sub": "Qwen2.5-7B \u00b7 n_kv=4"
     },
     {
-      "label": "Live runs",
+      "label": "Runs",
       "value": "94",
-      "sub": "of 94 rows"
+      "sub": "total benchmark rows"
     }
   ],
   "coverage": [

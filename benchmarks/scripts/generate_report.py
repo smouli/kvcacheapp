@@ -1407,7 +1407,7 @@ def build_payload(rows: list[dict]) -> dict:
             "sub": "Cold → warm TTFT",
         })
     insights.append({"label": "GQA vs dense KV", "value": "7×", "sub": "Qwen2.5-7B · n_kv=4"})
-    insights.append({"label": "Live runs", "value": str(len(live)), "sub": f"of {len(rows)} rows"})
+    insights.append({"label": "Runs", "value": str(len(rows)), "sub": "total benchmark rows"})
 
     # TTFT series by model for chart
     series_map: dict[str, dict[float, list[float]]] = defaultdict(lambda: defaultdict(list))
