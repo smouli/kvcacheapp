@@ -1,0 +1,115 @@
+# Modal benchmark catalog — models, TP, engines, workload grids
+# Used by modal_vllm.py / modal_sglang.py (planned) and generate_report.py labels
+
+defaults:
+  provider: modal
+  dtype: bfloat16
+  engines: [vllm, sglang]
+
+# Expanded in/out/conc grid (subset used per tier via matrix profiles)
+workload_profiles:
+  discovery:
+    description: Quick SA discovery — 4 shapes
+    input_tokens: [1024, 4096, 8192, 10240]
+    output_tokens: [128, 512]
+    concurrency: [1, 4, 8]
+    workloads: [single, cold_prefix, warm_prefix]
+
+  full:
+    description: Full sweep
+    input_tokens: [512, 1024, 2048, 4096, 8192, 10240, 16384]
+    output_tokens: [64, 128, 256, 512, 1024]
+    concurrency: [1, 2, 4, 8, 16, 32]
+    workloads: [single, cold_prefix, warm_prefix]
+
+  tp_smoke:
+    description: Multi-GPU smoke — fewer points, longer runs
+    input_tokens: [1024, 4096, 8192]
+    output_tokens: [128, 512]
+    concurrency: [1, 4, 8]
+    workloads: [single, cold_prefix, warm_prefix]
+
+models:
+  qwen7b:
+    id: Qwen/Qwen2.5-7B-Instruct
+    family: qwen
+    tp: 1
+    gpu: A100
+    vllm: true
+    sglang: true
+    matrix: legacy
+    notes: Baseline · live today · parity grid for engine A/B
+
+  qwen32b:
+    id: Qwen/Qwen2.5-32B-Instruct
+    family: qwen
+    tp: 2
+    gpu: A100:2
+    vllm: true
+    sglang: true
+    matrix: tp_smoke
+    notes: TP=2 NCCL demo · wired, run benchmark:modal:vllm:tp2
+
+  glm9b:
+    id: zai-org/glm-4-9b-chat-hf
+    family: glm
+    tp: 1
+    gpu: A100
+    vllm: true
+    sglang: true
+    trust_remote_code: true
+    matrix: discovery
+    notes: Small GLM · fits 1× A100
+
+  glm45_fp8:
+    id: zai-org/GLM-4.5-FP8
+    family: glm
+    tp: 8
+    gpu: H100:8
+    vllm: true
+    sglang: true
+    trust_remote_code: true
+    matrix: tp_smoke
+    notes: 358B MoE · needs 8× H100 (expensive; HF_TOKEN may be required)
+
+  kimi_linear:
+    id: moonshotai/Kimi-Linear-48B-A3B-Instruct
+    family: kimi
+    tp: 2
+    gpu: A100:2
+    vllm: true
+    sglang: true
+    matrix: tp_smoke
+    notes: MoE 48B · try TP=2 before K2
+
+  kimi_k2:
+    id: moonshotai/Kimi-K2-Instruct
+    family: kimi
+    tp: 8
+    gpu: H100:8
+    vllm: true
+    sglang: true
+    matrix: tp_smoke
+    notes: Production-style 8-GPU TP (Fireworks-style); long queue on Modal
+
+  minimax_m2:
+    id: MiniMaxAI/MiniMax-M2
+    family: minimax
+    tp: 4
+    gpu: H100:4
+    vllm: true
+    sglang: true
+    trust_remote_code: true
+    vllm_flags: [--enable-expert-parallel]
+    matrix: tp_smoke
+    notes: MoE · vLLM often TP=4 + EP, not pure TP8
+
+  muse_glimmer:
+    id: meta-models/Muse-Glimmer-30B
+    family: muse
+    tp: 2
+    gpu: A100:2
+    vllm: false
+    sglang: experimental
+    matrix: tp_smoke
+    notes: Multimodal + agentic · vLLM support TBD; try SGLang or transformers first

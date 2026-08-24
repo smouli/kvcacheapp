@@ -1,0 +1,9 @@
+# Official SGLang CUDA 12.4 runtime — FlashInfer + flash-attn prebuilt.
+FROM lmsysorg/sglang:v0.4.7-cu124
+
+RUN ln -sf "$(command -v python3)" /usr/local/bin/python \
+    && ln -sf "$(command -v python3)" /usr/bin/python
+
+# Modal layers pip on top; SGLang base is PEP-668 "externally managed"
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+ENV HF_HUB_ENABLE_HF_TRANSFER=1

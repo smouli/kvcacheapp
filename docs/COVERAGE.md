@@ -27,9 +27,11 @@ Two tiers (see also `docs/LAYERS.md`):
 
 **Commands:**
 ```bash
-npm run benchmark:modal:vllm   # dense serving matrix on Modal
-npm run benchmark:api          # Fireworks
+npm run benchmark:modal:vllm      # 7B · TP=1 · A100
+npm run benchmark:modal:vllm:tp2  # 32B · TP=2 · A100×2 NCCL
 ```
+
+All benchmarks run on **Modal** (no Fireworks / DO in the default report).
 
 ## Not in this harness (quality / agents)
 

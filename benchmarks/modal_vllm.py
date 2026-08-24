@@ -1,52 +1,53 @@
 """
-Serving-layer vLLM benchmarks on Modal (stand-in for a DO GPU droplet).
+Serving-layer vLLM benchmarks on Modal.
 
-Uses vLLM's offline LLM engine with prefix caching + batched prompts
-(continuous batching) — same serving mechanics without the fragile OpenAI
-server subprocess on Modal.
+  modal run benchmarks/modal_vllm.py --profile qwen7b
+  modal run benchmarks/modal_vllm.py --quick
+  modal run benchmarks/modal_vllm.py --profile qwen32b --tp 2
 
-  modal run benchmarks/modal_vllm.py           # 7B A100, full matrix
-  modal run benchmarks/modal_vllm.py --quick   # smoke test
-
-CSV tags: stack_layer=serving, provider=modal, engine=vLLM+Modal
+CSV: benchmarks/results/modal_serving_runs.csv (engine_family=vllm)
 """
 
 from __future__ import annotations
 
-import csv
 import subprocess
+import sys
 import time
-import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 
 import modal
+
+from modal_bench_lib import (
+    catalog_entry,
+    gpu_sku_for,
+    merge_serving_csv,
+    profile_name,
+)
 
 APP_NAME = "kvcache-vllm-serving"
 RESULTS_VOL = "kvcache-bench-results"
 HF_VOL = "kvcache-hf-cache"
 MOUNT = "/bench-results"
-MODEL_DEFAULT = "Qwen/Qwen2.5-7B-Instruct"
+BENCH_DIR = Path(__file__).resolve().parent
 
-
-def kv_gib_gqa(seq: int) -> float:
-    return 2 * 28 * seq * 4 * 128 * 2 / (1024**3)
-
-
-def kv_gib_dense(seq: int) -> float:
-    return 2 * 28 * seq * 3584 * 2 / (1024**3)
-
-
-# Modal cookbook pattern: debian_slim + vLLM wheel (CUDA provided by Modal).
 vllm_image = (
     modal.Image.debian_slim(python_version="3.12")
     .pip_install(
         "vllm==0.7.3",
         "huggingface_hub[hf_transfer]==0.26.2",
         "flashinfer-python==0.2.0.post2",
+        "pyyaml>=6.0",
         extra_index_url="https://flashinfer.ai/whl/cu124/torch2.5/",
     )
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1"})
+    .add_local_file(
+        str(BENCH_DIR / "modal_bench_lib.py"),
+        remote_path="/pkg/modal_bench_lib.py",
+    )
+    .add_local_file(
+        str(BENCH_DIR / "config" / "catalog.yaml"),
+        remote_path="/pkg/config/catalog.yaml",
+    )
 )
 
 app = modal.App(APP_NAME)
@@ -54,22 +55,95 @@ volume = modal.Volume.from_name(RESULTS_VOL, create_if_missing=True)
 hf_cache = modal.Volume.from_name(HF_VOL, create_if_missing=True)
 
 
-def make_prompt(n_tokens: int, seed: str = "shared") -> str:
-    chunk = f"[{seed}] The quick brown fox jumps over the lazy dog. Context. "
-    text = chunk
-    while len(text) < n_tokens * 4:
-        text += chunk
-    return text[: n_tokens * 4]
+def _remote_bench_lib():
+    import sys
+
+    if "/pkg" not in sys.path:
+        sys.path.insert(0, "/pkg")
+    from modal_bench_lib import (  # noqa: WPS433
+        approx_metrics,
+        build_cases,
+        make_serving_row,
+        prompts_for_case,
+    )
+
+    return build_cases, make_serving_row, prompts_for_case, approx_metrics
 
 
-def percentile(vals: list[float], p: float) -> float:
-    if not vals:
-        return 0.0
-    s = sorted(vals)
-    k = (len(s) - 1) * p / 100
-    f = int(k)
-    c = min(f + 1, len(s) - 1)
-    return s[f] + (s[c] - s[f]) * (k - f)
+def _run_bench(model_id: str, quick: bool, tp: int, profile: str, gpu_sku: str) -> list[dict]:
+    import os
+
+    from vllm import LLM, SamplingParams
+
+    build_cases, make_serving_row, prompts_for_case, approx_metrics = _remote_bench_lib()
+
+    if tp > 1:
+        os.environ.setdefault("NCCL_DEBUG", "WARN")
+
+    max_len = 8192 if quick else (12288 if tp >= 2 else 16384)
+    print(f"Loading {model_id} · vLLM · TP={tp} · gpu={gpu_sku} · max_len={max_len}", flush=True)
+
+    llm = LLM(
+        model=model_id,
+        dtype="bfloat16",
+        tensor_parallel_size=tp,
+        max_model_len=max_len,
+        gpu_memory_utilization=0.90,
+        enable_prefix_caching=True,
+        enforce_eager=True,
+        trust_remote_code=True,
+    )
+
+    cases = build_cases(quick=quick, tp=tp, profile=profile)
+    rows: list[dict] = []
+
+    def prime(prompt: str) -> None:
+        llm.generate([prompt], SamplingParams(temperature=0, max_tokens=8))
+
+    for case in cases:
+        phase, layer, inp, out, conc, workload = case
+        print(f"→ vLLM {workload} in={inp} out={out} conc={conc} tp={tp}", flush=True)
+        params = SamplingParams(temperature=0, max_tokens=out)
+        batch, cached_est = prompts_for_case(workload, inp, conc, prime_fn=prime)
+
+        t0 = time.perf_counter()
+        outputs = llm.generate(batch, params)
+        wall_s = time.perf_counter() - t0
+
+        prompt_tokens = 0
+        completion_tokens = 0
+        for out_i in outputs:
+            prompt_tokens = len(out_i.prompt_token_ids or [])
+            completion_tokens = len(out_i.outputs[0].token_ids) if out_i.outputs else 0
+
+        m = approx_metrics(
+            wall_s=wall_s,
+            n_outputs=len(outputs),
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            inp_fallback=inp,
+        )
+        row = make_serving_row(
+            engine_family="vllm",
+            engine_label=f"vLLM+Modal+TP{tp}",
+            model_id=model_id,
+            case=case,
+            metrics=m,
+            tp=tp,
+            gpu_sku=gpu_sku,
+            cached=cached_est,
+            batch_n=len(outputs),
+            wall_s=wall_s,
+        )
+        rows.append(row)
+        print(
+            f"   TTFT~{row['ttft_ms_p50']:.0f} ms · "
+            f"tok/s={row['output_tok_s_p50']:.1f} · cached≈{cached_est}",
+            flush=True,
+        )
+
+    volume.commit()
+    return rows
 
 
 @app.function(
@@ -78,179 +152,46 @@ def percentile(vals: list[float], p: float) -> float:
     timeout=3600,
     volumes={MOUNT: volume, "/root/.cache/huggingface": hf_cache},
 )
-def serve_and_bench(model_id: str, quick: bool, tp: int = 1) -> list[dict]:
-    from vllm import LLM, SamplingParams
+def serve_and_bench_tp1(
+    model_id: str, quick: bool, profile: str, gpu_sku: str
+) -> list[dict]:
+    return _run_bench(model_id, quick, tp=1, profile=profile, gpu_sku=gpu_sku)
 
-    print(f"Loading {model_id} with vLLM (prefix cache on, eager)…", flush=True)
-    llm = LLM(
-        model=model_id,
-        dtype="bfloat16",
-        tensor_parallel_size=tp,
-        max_model_len=8192 if quick else 16384,
-        gpu_memory_utilization=0.90,
-        enable_prefix_caching=True,
-        enforce_eager=True,
-        trust_remote_code=True,
-    )
-    tokenizer = llm.get_tokenizer()
 
-    if quick:
-        cases = [
-            ("A", "engine", 1024, 64, 1, "single"),
-            ("B", "kv_cache", 4096, 64, 1, "cold_prefix"),
-            ("B", "kv_cache", 4096, 64, 1, "warm_prefix"),
-            ("A", "engine", 1024, 64, 4, "single"),
-        ]
-    else:
-        cases = []
-        for inp, out in [
-            (512, 64),
-            (1024, 128),
-            (2048, 128),
-            (4096, 128),
-            (8192, 128),
-            (10240, 128),
-        ]:
-            for conc in (1, 4, 8):
-                cases.append(("A", "engine", inp, out, conc, "single"))
-            if inp >= 4096:
-                cases.append(("B", "kv_cache", inp, out, 1, "cold_prefix"))
-                cases.append(("B", "kv_cache", inp, out, 1, "warm_prefix"))
-                cases.append(("B", "kv_cache", inp, out, 4, "warm_prefix"))
-        cases.append(("A", "engine", 10240, 512, 1, "single"))
-        cases.append(("A", "engine", 10240, 512, 8, "single"))
-
-    rows: list[dict] = []
-    for phase, layer, inp, out, conc, workload in cases:
-        print(f"→ {workload} in={inp} out={out} conc={conc}", flush=True)
-        params = SamplingParams(temperature=0, max_tokens=out)
-
-        if workload == "cold_prefix":
-            prompts = [make_prompt(inp, seed=f"cold-{i}") for i in range(max(conc, 3))]
-        elif workload == "warm_prefix":
-            shared = make_prompt(max(inp - 64, 256), seed="warm-shared")
-            # Prime prefix cache
-            llm.generate([shared + "\nUser: priming"], params)
-            prompts = [
-                shared + f"\nUser: follow-up question number {i}."
-                for i in range(max(conc, 3))
-            ]
-        else:
-            n = max(conc, 1)
-            prompts = [make_prompt(inp, seed=f"single-{i}") for i in range(n)]
-
-        # Batch = continuous batching / concurrency proxy
-        t0 = time.perf_counter()
-        outputs = llm.generate(prompts[: max(conc, 3)], params)
-        wall_s = time.perf_counter() - t0
-
-        ttfts: list[float] = []
-        toks: list[float] = []
-        prompt_tokens = 0
-        completion_tokens = 0
-        for out_i in outputs:
-            pt = len(out_i.prompt_token_ids or [])
-            ct = len(out_i.outputs[0].token_ids) if out_i.outputs else 0
-            prompt_tokens = pt
-            completion_tokens = ct
-            # Approximate per-request TTFT as share of wall for batch
-            # (single-request cases: wall ≈ e2e; first-token proxy ≈ wall * pt/(pt+ct))
-            total = max(pt + ct, 1)
-            ttft_approx = (wall_s * 1000) * (pt / total) / max(len(outputs), 1)
-            ttfts.append(ttft_approx)
-            toks.append(ct / max(wall_s / max(len(outputs), 1), 1e-6))
-
-        seq = prompt_tokens or inp
-        # For warm_prefix, estimate cached tokens ≈ shared prefix length
-        cached = 0
-        if workload == "warm_prefix":
-            cached = max(seq - 32, 0)
-
-        row = {
-            "run_id": f"modal-vllm-{uuid.uuid4().hex[:8]}",
-            "phase": phase,
-            "stack_layer": "serving",
-            "layer": layer,
-            "provider": "modal",
-            "model": model_id,
-            "engine": f"vLLM+Modal+TP{tp}",
-            "input_tokens_target": inp,
-            "output_tokens_target": out,
-            "concurrency": conc,
-            "workload": workload,
-            "cache_mode": "on" if workload == "warm_prefix" else "off",
-            "session_affinity": "local" if workload == "warm_prefix" else "",
-            "ttft_ms_p50": round(percentile(ttfts, 50), 2),
-            "ttft_ms_p95": round(percentile(ttfts, 95), 2),
-            "tpot_ms_p50": round(1000.0 / max(percentile(toks, 50), 1e-6), 2),
-            "output_tok_s_p50": round(percentile(toks, 50), 2),
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "cached_prompt_tokens": cached,
-            "kv_gib_modeled_gqa": round(kv_gib_gqa(seq), 4),
-            "kv_gib_modeled_dense": round(kv_gib_dense(seq), 4),
-            "notes": (
-                f"Modal serving-layer offline vLLM; TP={tp}; "
-                f"batch={len(outputs)}; wall_s={wall_s:.2f}; "
-                f"tok_approx={getattr(tokenizer, 'name_or_path', '')}"
-            ),
-            "timestamp": datetime.now(timezone.utc)
-            .isoformat()
-            .replace("+00:00", "Z"),
-        }
-        rows.append(row)
-        print(
-            f"   TTFT~p50={row['ttft_ms_p50']:.0f} ms · "
-            f"tok/s={row['output_tok_s_p50']:.1f} · "
-            f"cached≈{row['cached_prompt_tokens']}",
-            flush=True,
-        )
-
-    volume.commit()
-    return rows
+@app.function(
+    gpu="A100:2",
+    image=vllm_image,
+    timeout=5400,
+    volumes={MOUNT: volume, "/root/.cache/huggingface": hf_cache},
+)
+def serve_and_bench_tp2(
+    model_id: str, quick: bool, profile: str, gpu_sku: str
+) -> list[dict]:
+    return _run_bench(model_id, quick, tp=2, profile=profile, gpu_sku=gpu_sku)
 
 
 @app.local_entrypoint()
-def main(quick: bool = False, model: str = MODEL_DEFAULT, tp: int = 1):
-    print(f"Modal vLLM serving bench · model={model} · tp={tp} · quick={quick}")
-    rows = serve_and_bench.remote(model, quick, tp)
+def main(
+    quick: bool = False,
+    model: str = "",
+    tp: int = 0,
+    profile: str = "",
+):
+    tp_arg = int(tp) if tp else 0
+    ent = catalog_entry(profile or None, model, tp_arg or 1)
+    model_id = model or ent["id"]
+    tp = tp_arg or int(ent.get("tp") or 1)
+    gpu_sku = gpu_sku_for(tp, ent.get("gpu"))
+    prof = profile_name(ent, quick, tp) if not quick else "discovery"
+
+    print(f"Modal vLLM · model={model_id} · tp={tp} · gpu={gpu_sku} · profile={prof}")
+    fn = serve_and_bench_tp2 if tp >= 2 else serve_and_bench_tp1
+    rows = fn.remote(model_id, quick, prof, gpu_sku)
 
     root = Path(__file__).resolve().parents[1]
-    out_csv = root / "benchmarks" / "results" / "modal_vllm_runs.csv"
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-
-    existing: list[dict] = []
-    if out_csv.exists():
-        with out_csv.open(newline="", encoding="utf-8") as f:
-            existing = list(csv.DictReader(f))
-
-    def key(r: dict) -> tuple:
-        return (
-            r.get("model", ""),
-            str(r.get("input_tokens_target", "")),
-            str(r.get("concurrency", "")),
-            r.get("workload", ""),
-            r.get("engine", ""),
-        )
-
-    by = {key(r): r for r in existing}
-    for r in rows:
-        by[key(r)] = r
-    merged = list(by.values())
-    fields = (
-        list(rows[0].keys())
-        if rows
-        else (list(existing[0].keys()) if existing else [])
-    )
-
-    with out_csv.open("w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
-        w.writeheader()
-        w.writerows(merged)
-
-    print(f"Wrote {len(rows)} new / {len(merged)} total → {out_csv}")
+    merge_serving_csv(rows)
     subprocess.run(
-        ["python3", str(root / "benchmarks" / "scripts" / "generate_report.py")],
+        [sys.executable, str(root / "benchmarks" / "scripts" / "generate_report.py")],
         cwd=root,
         check=False,
     )

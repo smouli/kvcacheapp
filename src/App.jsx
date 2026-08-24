@@ -274,16 +274,13 @@ export default function App() {
         </p>
         <p>
           The bundled <a href="/benchmark-report.html">benchmark report</a>{' '}
-          splits results into two tiers: <strong>model layer</strong>{' '}
-          (isolated GPU — KV sizing, prefill TTFT, decode tok/s via Modal) and{' '}
-          <strong>serving layer</strong> (HTTP API, vLLM under load, prefix
-          cache hits). See <code>docs/LAYERS.md</code> and{' '}
-          <code>docs/DEPLOY_DIGITALOCEAN.md</code> for how to run each on a{' '}
-          <strong>DigitalOcean GPU droplet</strong> or provider API.
+          covers three layers on <strong>Modal</strong>:{' '}
+          <strong>hardware</strong> (CUDA / NCCL), <strong>model</strong> (KV, prefill
+          TTFT), and <strong>serving</strong> (vLLM TP=1/TP=2, prefix cache,
+          concurrency). See <code>docs/LAYERS.md</code>.
         </p>
         <p>
-          For larger models, use <code>benchmarks/scripts/serve_vllm.sh</code>{' '}
-          with tensor parallel (NCCL) or AWQ/FP8 quantization — see{' '}
+          Multi-GPU inference uses vLLM tensor parallel (NCCL on A100×2). See{' '}
           <code>docs/GPU_STACK.md</code>.
         </p>
       </section>

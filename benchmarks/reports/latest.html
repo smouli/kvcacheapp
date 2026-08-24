@@ -4,289 +4,676 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>KV Cache · Benchmark Report</title>
+<meta name="description" content="Modal-only inference discovery: CUDA, NCCL, model prefill, vLLM serving with TP=2."/>
+<meta property="og:title" content="KV Cache · Benchmark Report"/>
+<meta property="og:description" content="94 live runs across hardware, model, and serving layers."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@600;700;800&display=swap" rel="stylesheet"/>
 <style>
+
 :root {
-  --bg:#f4f1ea; --ink:#1c1917; --muted:#78716c; --card:#fffcf7;
-  --line:#e7e0d5; --serve:#0f766e; --accent:#b45309;
-  font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
-  color:var(--ink); background:var(--bg);
+  --bg: #e9eef3;
+  --ink: #0b1220;
+  --muted: #5b6577;
+  --panel: rgba(255,255,255,.78);
+  --panel-solid: #f7fafc;
+  --line: #c9d4e0;
+  --teal: #0d9488;
+  --teal-deep: #0f766e;
+  --sky: #0369a1;
+  --amber: #d97706;
+  --ok-bg: #ccfbf1;
+  --ok-ink: #115e59;
+  --todo-bg: #e8edf3;
+  --todo-ink: #64748b;
+  --display: "Syne", system-ui, sans-serif;
+  --sans: "DM Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
 }
-* { box-sizing:border-box; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body {
-  max-width:1120px; margin:0 auto; padding:2.5rem 1.25rem 4rem;
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--sans);
   background:
-    radial-gradient(1200px 500px at 10% -10%, #fde68a55, transparent 60%),
-    radial-gradient(900px 400px at 100% 0%, #a7f3d055, transparent 55%),
+    linear-gradient(180deg, #dfe8f2 0%, transparent 42%),
+    repeating-linear-gradient(0deg, transparent, transparent 31px, rgba(11,18,32,.04) 31px, rgba(11,18,32,.04) 32px),
+    repeating-linear-gradient(90deg, transparent, transparent 31px, rgba(11,18,32,.04) 31px, rgba(11,18,32,.04) 32px),
     var(--bg);
+  min-height: 100vh;
 }
-.eyebrow {
-  font-family:ui-sans-serif,system-ui,sans-serif; font-size:.72rem;
-  letter-spacing:.16em; text-transform:uppercase; color:var(--accent);
-  font-weight:700; margin:0 0 .6rem;
+a { color: var(--teal-deep); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:hover { color: var(--sky); }
+
+.topnav {
+  position: sticky; top: 0; z-index: 20;
+  backdrop-filter: blur(12px);
+  background: rgba(233,238,243,.82);
+  border-bottom: 1px solid var(--line);
 }
-h1 {
-  font-size:clamp(2rem,4vw,2.75rem); line-height:1.1; margin:0 0 .75rem;
-  letter-spacing:-.03em; max-width:18ch;
+.topnav-inner {
+  max-width: 1120px; margin: 0 auto;
+  padding: .7rem 1.25rem;
+  display: flex; flex-wrap: wrap; gap: .75rem 1.25rem;
+  align-items: center; justify-content: space-between;
 }
-.lead { color:var(--muted); font-size:1.05rem; line-height:1.55; max-width:46rem; }
-.muted { color:var(--muted); }
-.sans { font-family:ui-sans-serif,system-ui,sans-serif; }
+.brand-mark {
+  font-family: var(--display); font-weight: 800; font-size: 1.05rem;
+  letter-spacing: -.02em; color: var(--ink); text-decoration: none;
+}
+.brand-mark span { color: var(--teal); }
+.nav-links { display: flex; flex-wrap: wrap; gap: .35rem .85rem; }
+.nav-links a {
+  font-size: .82rem; font-weight: 600; color: var(--muted); text-decoration: none;
+}
+.nav-links a:hover { color: var(--ink); }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 1.25rem 4rem; }
+
+.hero {
+  padding: 2.75rem 0 1.5rem;
+  animation: rise .7s ease both;
+}
+.hero-brand {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(3rem, 9vw, 5.25rem);
+  line-height: .92;
+  letter-spacing: -.045em;
+  margin: 0 0 .85rem;
+  max-width: 12ch;
+}
+.hero-brand em {
+  font-style: normal;
+  background: linear-gradient(120deg, var(--teal), var(--sky));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hero-sub {
+  font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+  color: var(--muted); max-width: 38rem; line-height: 1.5; margin: 0 0 1.5rem;
+}
+.hero-cta { display: flex; flex-wrap: wrap; gap: .6rem; }
+.btn {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .65rem 1rem; border-radius: 8px; font-weight: 650; font-size: .9rem;
+  text-decoration: none; border: 1px solid transparent;
+}
+.btn-primary { background: var(--ink); color: #fff; }
+.btn-primary:hover { background: #1e293b; color: #fff; }
+.btn-ghost { background: var(--panel); color: var(--ink); border-color: var(--line); }
+.btn-ghost:hover { border-color: var(--teal); color: var(--teal-deep); }
+
+.stack-strip {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem;
+  margin: 1.75rem 0 0;
+  animation: rise .8s .08s ease both;
+}
+@media (max-width: 720px) { .stack-strip { grid-template-columns: 1fr; } }
+.stack-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 1rem 1.05rem; backdrop-filter: blur(8px);
+}
+.stack-card .step {
+  font-family: var(--mono); font-size: .7rem; color: var(--teal-deep);
+  letter-spacing: .08em; text-transform: uppercase; font-weight: 500;
+}
+.stack-card h3 {
+  font-family: var(--display); font-size: 1.15rem; margin: .35rem 0 .4rem;
+  letter-spacing: -.02em;
+}
+.stack-card p { margin: 0; font-size: .88rem; color: var(--muted); line-height: 1.45; }
+
 .kpi {
-  display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
-  gap:.85rem; margin:1.75rem 0;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: .75rem; margin: 2rem 0 0;
+  animation: rise .85s .12s ease both;
 }
-.card {
-  background:var(--card); border:1px solid var(--line); border-radius:4px;
-  padding:1rem 1.05rem;
+.stat {
+  background: var(--panel-solid); border: 1px solid var(--line); border-radius: 12px;
+  padding: .9rem 1rem;
 }
-.card span {
-  display:block; font-family:ui-sans-serif,system-ui,sans-serif;
-  font-size:.7rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);
+.stat-k {
+  display: block; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600;
 }
-.card b { display:block; font-size:1.65rem; margin-top:.35rem; letter-spacing:-.02em; }
-.card.insight small { display:block; margin-top:.35rem; color:var(--muted); font-size:.85rem; }
-.card.insight b { color:var(--accent); }
-section { margin-top:2.75rem; }
-h2 { font-size:1.45rem; margin:0 0 .4rem; letter-spacing:-.02em; }
-h3 { font-size:.95rem; margin:1.2rem 0 .45rem; font-family:ui-sans-serif,system-ui,sans-serif; }
-.pill {
-  display:inline-block; font-family:ui-sans-serif,system-ui,sans-serif;
-  font-size:.75rem; padding:.25rem .55rem; margin:.15rem .2rem .15rem 0;
-  border:1px solid var(--line); border-radius:999px; background:#fff;
+.stat-v {
+  display: block; font-family: var(--display); font-weight: 800;
+  font-size: clamp(1.55rem, 3vw, 2rem); letter-spacing: -.03em; margin-top: .25rem;
+  color: var(--teal-deep);
 }
+.stat-s { display: block; font-size: .82rem; color: var(--muted); margin-top: .2rem; }
+
+section {
+  margin-top: 3rem;
+  animation: rise .6s ease both;
+}
+section h2 {
+  font-family: var(--display); font-weight: 700; font-size: clamp(1.45rem, 3vw, 1.85rem);
+  letter-spacing: -.03em; margin: 0 0 .35rem;
+}
+.lead { color: var(--muted); font-size: 1rem; line-height: 1.5; max-width: 46rem; margin: 0 0 1rem; }
+.muted { color: var(--muted); }
+h3 {
+  font-size: .92rem; margin: 1.15rem 0 .45rem; font-weight: 650; color: var(--ink);
+}
+
 .cov-grid {
-  display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-  gap:.75rem; margin-top:1rem;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: .7rem; margin-top: .85rem;
 }
 .cov {
-  border:1px solid var(--line); border-radius:4px; padding:.85rem .9rem;
-  background:var(--card); font-family:ui-sans-serif,system-ui,sans-serif;
+  border: 1px solid var(--line); border-radius: 10px; padding: .85rem .9rem;
+  background: var(--panel-solid);
 }
-.cov.ok { border-color:#99f6e4; background:#f0fdfa; }
-.cov.todo { opacity:.72; }
-.cov-top { display:flex; justify-content:space-between; gap:.5rem; align-items:start; }
-.detail { font-size:.82rem; color:var(--muted); margin-top:.35rem; }
+.cov.ok { border-color: #99f6e4; background: linear-gradient(160deg, #f0fdfa, #fff); }
+.cov.todo { opacity: .78; }
+.cov-top { display: flex; justify-content: space-between; gap: .5rem; align-items: start; }
+.detail { font-size: .82rem; color: var(--muted); margin: .35rem 0 0; }
+
 .badge {
-  font-size:.65rem; letter-spacing:.08em; text-transform:uppercase;
-  padding:.15rem .4rem; border-radius:999px; font-weight:700;
-  font-family:ui-sans-serif,system-ui,sans-serif;
+  font-size: .62rem; letter-spacing: .08em; text-transform: uppercase;
+  padding: .18rem .42rem; border-radius: 6px; font-weight: 700; white-space: nowrap;
 }
-.badge.ok { background:#ccfbf1; color:#0f766e; }
-.badge.todo { background:#f5f5f4; color:#78716c; }
-.row {
-  display:grid; grid-template-columns:minmax(10rem,16rem) 1fr minmax(14rem,22rem);
-  gap:.75rem; align-items:center; margin:.45rem 0;
-  font-family:ui-sans-serif,system-ui,sans-serif;
+.badge.ok { background: var(--ok-bg); color: var(--ok-ink); }
+.badge.todo { background: var(--todo-bg); color: var(--todo-ink); }
+
+.pill {
+  display: inline-block; font-size: .78rem; padding: .28rem .55rem; margin: .15rem .2rem .15rem 0;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink);
 }
-.lbl { font-size:.72rem; color:var(--muted); }
-.track { background:#e7e5e4; height:10px; border-radius:999px; overflow:hidden; }
-.fill { height:100%; border-radius:999px; }
-.val { font-size:.72rem; color:#57534e; }
+
+.charts {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0 1.5rem;
+}
+@media (max-width: 860px) { .charts { grid-template-columns: 1fr; } }
+.chart {
+  margin: 0; background: var(--panel-solid); border: 1px solid var(--line);
+  border-radius: 14px; padding: 1rem 1rem .75rem; overflow: hidden;
+}
+.chart figcaption { display: flex; flex-direction: column; gap: .15rem; margin-bottom: .35rem; }
+.chart figcaption strong { font-family: var(--display); font-size: 1.05rem; }
+.chart-leg { display: flex; flex-wrap: wrap; gap: .55rem; margin-bottom: .35rem; }
+.leg { display: inline-flex; align-items: center; gap: .35rem; font-size: .78rem; color: var(--muted); }
+.leg i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart .g { stroke: #d5dee8; stroke-width: 1; }
+.chart .tick { fill: var(--muted); font-size: 10px; font-family: var(--mono); }
+.chart .axis { fill: var(--muted); font-size: 11px; font-family: var(--sans); }
+.chart .line {
+  stroke-dasharray: 1200; stroke-dashoffset: 1200;
+  animation: draw 1.2s ease forwards .2s;
+}
+.bar-anim { transform-origin: bottom; animation: grow .7s ease both; }
+
+.bar-row {
+  display: grid; grid-template-columns: minmax(9rem,15rem) 1fr minmax(12rem,22rem);
+  gap: .7rem; align-items: center; margin: .42rem 0;
+}
+.lbl { font-size: .72rem; color: var(--muted); font-family: var(--mono); }
+.track {
+  background: #d9e2ec; height: 9px; border-radius: 999px; overflow: hidden;
+}
+.fill {
+  height: 100%; width: 0; border-radius: 999px; background: var(--c, var(--teal));
+  animation: fillbar .9s cubic-bezier(.2,.8,.2,1) forwards;
+}
+.fill { --w: 0%; }
+@keyframes fillbar { to { width: var(--w); } }
+.val { font-size: .72rem; color: #475569; font-family: var(--mono); }
+
+.filters {
+  display: flex; flex-wrap: wrap; gap: .45rem; margin: .75rem 0 1rem;
+}
+.filters button {
+  font-family: var(--sans); font-size: .8rem; font-weight: 600;
+  padding: .4rem .7rem; border-radius: 8px; border: 1px solid var(--line);
+  background: #fff; color: var(--muted); cursor: pointer;
+}
+.filters button.active, .filters button:hover {
+  border-color: var(--teal); color: var(--teal-deep); background: #f0fdfa;
+}
+
 .table-wrap {
-  overflow-x:auto; border:1px solid var(--line); border-radius:4px; background:var(--card);
+  overflow-x: auto; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel-solid);
 }
 table {
-  width:100%; border-collapse:collapse; font-size:.78rem;
-  font-family:ui-sans-serif,system-ui,sans-serif;
+  width: 100%; border-collapse: collapse; font-size: .76rem;
 }
 th, td {
-  padding:.5rem .55rem; text-align:left; border-bottom:1px solid #f5f5f4; white-space:nowrap;
+  padding: .5rem .55rem; text-align: left; border-bottom: 1px solid #e8eef4; white-space: nowrap;
 }
 th {
-  background:#fafaf9; font-size:.65rem; letter-spacing:.06em;
-  text-transform:uppercase; color:var(--muted);
+  background: #eef3f8; font-size: .64rem; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--muted); position: sticky; top: 0;
 }
-.mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.92em; }
+tr:hover td { background: #f4f8fb; }
+.mono { font-family: var(--mono); font-size: .92em; }
+
 pre.mono {
-  background:var(--card); border:1px solid var(--line); padding:1rem;
-  border-radius:4px; overflow:auto; font-size:.78rem; line-height:1.45;
+  background: #0b1220; color: #d6e4f0; border-radius: 12px; padding: 1.1rem 1.2rem;
+  overflow: auto; font-size: .78rem; line-height: 1.5; border: 1px solid #1e293b;
 }
-a { color:var(--serve); }
+pre.mono .c { color: #5eead4; }
+
 footer {
-  margin-top:3rem; font-size:.78rem; color:#a8a29e;
-  font-family:ui-sans-serif,system-ui,sans-serif;
+  margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+  font-size: .78rem; color: var(--muted); display: flex; flex-wrap: wrap;
+  gap: .5rem 1.25rem; justify-content: space-between;
 }
-@media (max-width:800px) { .row { grid-template-columns:1fr; gap:.25rem; } }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes grow {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+
+@media (max-width: 800px) {
+  .bar-row { grid-template-columns: 1fr; gap: .2rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important; transition: none !important;
+  }
+  .fill { width: var(--w) !important; }
+}
+
+.hw-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:.75rem; margin:1rem 0; }
+.hw-card { background:var(--panel-solid); border:1px solid var(--line); border-radius:12px; padding:1rem; }
+.hw-card .sku { font-family:var(--display); font-weight:800; font-size:1.2rem; letter-spacing:-.02em; }
+.hw-card .name { font-size:.82rem; color:var(--muted); margin:.2rem 0 .75rem; }
+.hw-metrics { display:grid; grid-template-columns:1fr 1fr; gap:.55rem; }
+.hw-metrics div { background:#eef3f8; border-radius:8px; padding:.55rem .65rem; }
+.hw-metrics span { display:block; font-size:.65rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; }
+.hw-metrics b { font-family:var(--mono); font-size:1.05rem; color:var(--teal-deep); }
+
+.bar-row {
+  display: grid; grid-template-columns: minmax(9rem,15rem) 1fr minmax(10rem,22rem);
+  gap: .7rem; align-items: center; margin: .42rem 0;
+}
+.lbl { font-size: .72rem; color: var(--muted); font-family: var(--mono); }
+.track { background: #d9e2ec; height: 9px; border-radius: 999px; overflow: hidden; }
+.fill {
+  height: 100%; width: 0; border-radius: 999px; background: var(--c, var(--teal));
+  animation: fillbar .9s cubic-bezier(.2,.8,.2,1) forwards;
+}
+.fill { --w: 0%; --c: var(--teal); }
+@keyframes fillbar { to { width: var(--w); } }
+.val { font-size: .72rem; color: #475569; font-family: var(--mono); }
+@media (max-width: 800px) { .bar-row { grid-template-columns: 1fr; gap: .2rem; } }
+@media (prefers-reduced-motion: reduce) {
+  .fill { width: var(--w) !important; animation: none !important; }
+}
 </style>
 </head>
 <body>
-  <p class="eyebrow">KV Cache App · inference benchmark suite</p>
-  <h1>What we measure, and what the numbers say</h1>
-  <p class="lead">
-    Two tiers: <strong>model layer</strong> (isolated GPU — KV math, prefill, decode)
-    and <strong>serving layer</strong> (vLLM / API — concurrency, prefix cache, client TTFT).
-    Live runs on Modal + Fireworks; DO GPU droplet remains optional.
-  </p>
-
-  <div class="kpi">
-    <div class="card"><span>Total runs</span><b>50</b></div>
-    <div class="card"><span>Live runs</span><b>43</b></div>
-    <div class="card"><span>Model layer</span><b>8</b></div>
-    <div class="card"><span>Serving layer</span><b>42</b></div>
-    <div class="card"><span>Providers</span><b>3</b></div>
-    <div class="card"><span>GQA savings</span><b>7×</b></div>
-  </div>
-
-  <section>
-    <h2>Coverage</h2>
-    <p class="lead muted">Green = live data on hand. Grey = harness ready, not run yet here.</p>
-    <div class="cov-grid"><div class="cov ok"><div class="cov-top"><b>Model · KV math</b><span class="badge ok">live</span></div><div class="detail">GQA vs dense GiB vs S</div></div><div class="cov ok"><div class="cov-top"><b>Model · Prefill TTFT</b><span class="badge ok">live</span></div><div class="detail">Modal transformers, batch=1</div></div><div class="cov ok"><div class="cov-top"><b>Model · Decode tok/s</b><span class="badge ok">live</span></div><div class="detail">Isolated generate path</div></div><div class="cov ok"><div class="cov-top"><b>Serving · vLLM batching</b><span class="badge ok">live</span></div><div class="detail">Modal A100 continuous batch</div></div><div class="cov ok"><div class="cov-top"><b>Serving · Prefix cache</b><span class="badge ok">live</span></div><div class="detail">cold vs warm_prefix</div></div><div class="cov ok"><div class="cov-top"><b>Serving · Concurrency</b><span class="badge ok">live</span></div><div class="detail">conc ≥ 4</div></div><div class="cov ok"><div class="cov-top"><b>Serving · Hosted API</b><span class="badge ok">live</span></div><div class="detail">Fireworks OpenAI-compatible</div></div><div class="cov todo"><div class="cov-top"><b>Serving · DO GPU droplet</b><span class="badge todo">todo</span></div><div class="detail">vLLM on DigitalOcean (optional)</div></div></div>
-  </section>
-
-  <section>
-    <h2>Headline insights</h2>
-    <div class="kpi"><div class="card insight"><span>Prefill ∝ context</span><b>1.5×</b><small>Model TTFT 1024→10240 tok</small></div><div class="card insight"><span>Prefix cache win</span><b>2.0×</b><small>Cold → warm TTFT (matched)</small></div><div class="card insight"><span>GQA vs dense KV</span><b>7×</b><small>Qwen2.5-7B n_kv=4</small></div><div class="card insight"><span>Live measurements</span><b>43</b><small>of 50 rows</small></div></div>
-  </section>
-
-  <section>
-    <h2>Inventory</h2>
-    <h3>Providers</h3>
-    <div><span class="pill">modal · 35</span> <span class="pill">fireworks · 8</span> <span class="pill">digitalocean_gpu · 7</span></div>
-    <h3>Models</h3>
-    <div><span class="pill">Qwen2.5-7B · 42</span> <span class="pill">Qwen2.5-0.5B · 4</span> <span class="pill">qwen3p7-plus · 4</span></div>
-    <h3>Workloads</h3>
-    <div><span class="pill">single · 35</span> <span class="pill">warm_prefix · 9</span> <span class="pill">cold_prefix · 6</span></div>
-  </section>
-
-  <section>
-    <h2>Model layer — architecture &amp; KV</h2>
-    <p class="lead muted">Batch=1, no HTTP. TTFT ≈ prefill. Links latency to modeled GQA KV GiB.</p>
-    <div class="row"><span class="lbl">Qwen2.5-0.5B · S=1024</span><div class="track"><div class="fill" style="width:14.9%;background:#4f46e5"></div></div><span class="val">1254 ms · 37.76 tok/s · KV 0.0132 · cache 0 · peak 1.232 GiB</span></div>
-<div class="row"><span class="lbl">Qwen2.5-7B · S=1024</span><div class="track"><div class="fill" style="width:10.2%;background:#4f46e5"></div></div><span class="val">856 ms · 31.31 tok/s · KV 0.0615 · cache 0 · peak 14.547 GiB</span></div>
-<div class="row"><span class="lbl">Qwen2.5-0.5B · S=8192</span><div class="track"><div class="fill" style="width:100.0%;background:#4f46e5"></div></div><span class="val">8418 ms · 35.62 tok/s · KV 0.0952 · cache 0 · peak 9.323 GiB</span></div>
-<div class="row"><span class="lbl">Qwen2.5-7B · S=8192</span><div class="track"><div class="fill" style="width:24.2%;background:#4f46e5"></div></div><span class="val">2040 ms · 26.64 tok/s · KV 0.4443 · cache 0 · peak 17.006 GiB</span></div>
-<div class="row"><span class="lbl">Qwen2.5-7B · S=10240</span><div class="track"><div class="fill" style="width:31.2%;background:#4f46e5"></div></div><span class="val">2625 ms · 26.19 tok/s · KV 0.5537 · cache 0 · peak 17.709 GiB</span></div>
-<div class="row"><span class="lbl">Qwen2.5-7B · S=10240</span><div class="track"><div class="fill" style="width:31.4%;background:#4f46e5"></div></div><span class="val">2645 ms · 25.44 tok/s · KV 0.5742 · cache 0 · peak 17.709 GiB</span></div>
-<div class="row"><span class="lbl">Qwen2.5-0.5B · S=10240</span><div class="track"><div class="fill" style="width:10.1%;background:#4f46e5"></div></div><span class="val">848 ms · 68.31 tok/s · KV 0.1187 · cache 0 · peak 3.965 GiB</span></div>
-<div class="row"><span class="lbl">Qwen2.5-0.5B · S=10240</span><div class="track"><div class="fill" style="width:3.3%;background:#4f46e5"></div></div><span class="val">280 ms · 57.72 tok/s · KV 0.123 · cache 0 · peak 3.964 GiB</span></div>
-  </section>
-
-  <section>
-    <h2>Serving layer — clients &amp; continuous batching</h2>
-    <p class="lead muted">vLLM on Modal, Fireworks API, optional DO GPU. Watch warm_prefix vs cold_prefix and concurrency.</p>
-    <div class="row"><span class="lbl">modal · Qwen2.5-7B · S=512 · c=1 · single</span><div class="track"><div class="fill" style="width:13.0%;background:#0f766e"></div></div><span class="val">950 ms · 60.18 tok/s · KV 0.0287 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=512 · c=4 · single</span><div class="track"><div class="fill" style="width:3.3%;background:#0f766e"></div></div><span class="val">245 ms · 233.3 tok/s · KV 0.0287 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=512 · c=8 · single</span><div class="track"><div class="fill" style="width:1.7%;background:#0f766e"></div></div><span class="val">125 ms · 456.51 tok/s · KV 0.0287 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=1 · single</span><div class="track"><div class="fill" style="width:23.0%;background:#0f766e"></div></div><span class="val">1684 ms · 67.91 tok/s · KV 0.0573 · cache 0</span></div>
-<div class="row"><span class="lbl">firewor · qwen3p7-pl · S=1024 · c=1 · single</span><div class="track"><div class="fill" style="width:14.2%;background:#0f766e"></div></div><span class="val">1044 ms · 128000000.0 tok/s · KV 0.0538 · cache 0</span></div>
-<div class="row"><span class="lbl">firewor · Qwen2.5-7B · S=1024 · c=1 · single</span><div class="track"><div class="fill" style="width:3.3%;background:#0f766e"></div></div><span class="val">245 ms · 71.4 tok/s · KV 0.055 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=4 · single</span><div class="track"><div class="fill" style="width:6.2%;background:#0f766e"></div></div><span class="val">455 ms · 251.44 tok/s · KV 0.0573 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=8 · single</span><div class="track"><div class="fill" style="width:3.2%;background:#0f766e"></div></div><span class="val">234 ms · 489.56 tok/s · KV 0.0573 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=2048 · c=1 · single</span><div class="track"><div class="fill" style="width:24.8%;background:#0f766e"></div></div><span class="val">1816 ms · 66.53 tok/s · KV 0.1145 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=2048 · c=4 · single</span><div class="track"><div class="fill" style="width:6.8%;background:#0f766e"></div></div><span class="val">501 ms · 241.21 tok/s · KV 0.1145 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=2048 · c=8 · single</span><div class="track"><div class="fill" style="width:3.7%;background:#0f766e"></div></div><span class="val">269 ms · 449.01 tok/s · KV 0.1145 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="width:12.1%;background:#0f766e"></div></div><span class="val">885 ms · 140.59 tok/s · KV 0.2362 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · single</span><div class="track"><div class="fill" style="width:27.4%;background:#0f766e"></div></div><span class="val">2004 ms · 62.01 tok/s · KV 0.2289 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="width:8.4%;background:#0f766e"></div></div><span class="val">615 ms · 201.48 tok/s · KV 0.2032 · cache 3773</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=4 · single</span><div class="track"><div class="fill" style="width:7.9%;background:#0f766e"></div></div><span class="val">580 ms · 214.47 tok/s · KV 0.2289 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=4 · warm_prefix</span><div class="track"><div class="fill" style="width:6.5%;background:#0f766e"></div></div><span class="val">478 ms · 258.87 tok/s · KV 0.2032 · cache 3773</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=8 · single</span><div class="track"><div class="fill" style="width:4.5%;background:#0f766e"></div></div><span class="val">332 ms · 374.63 tok/s · KV 0.2289 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="width:13.4%;background:#0f766e"></div></div><span class="val">980 ms · 128.7 tok/s · KV 0.4724 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=1 · single</span><div class="track"><div class="fill" style="width:29.6%;background:#0f766e"></div></div><span class="val">2172 ms · 58.06 tok/s · KV 0.4577 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="width:8.8%;background:#0f766e"></div></div><span class="val">642 ms · 196.03 tok/s · KV 0.4091 · cache 7629</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=4 · single</span><div class="track"><div class="fill" style="width:10.1%;background:#0f766e"></div></div><span class="val">741 ms · 170.21 tok/s · KV 0.4577 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=4 · warm_prefix</span><div class="track"><div class="fill" style="width:6.8%;background:#0f766e"></div></div><span class="val">497 ms · 253.28 tok/s · KV 0.4091 · cache 7629</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=8 · single</span><div class="track"><div class="fill" style="width:6.2%;background:#0f766e"></div></div><span class="val">454 ms · 277.86 tok/s · KV 0.4577 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="width:11.6%;background:#0f766e"></div></div><span class="val">851 ms · 148.62 tok/s · KV 0.5905 · cache 0</span></div>
-<div class="row"><span class="lbl">firewor · qwen3p7-pl · S=10240 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="width:18.8%;background:#0f766e"></div></div><span class="val">1379 ms · 128000000.0 tok/s · KV 0.5396 · cache 0</span></div>
-<div class="row"><span class="lbl">firewor · Qwen2.5-7B · S=10240 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="width:26.2%;background:#0f766e"></div></div><span class="val">1920 ms · 74.1 tok/s · KV 0.551 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=1 · single</span><div class="track"><div class="fill" style="width:100.0%;background:#0f766e"></div></div><span class="val">7328 ms · 66.69 tok/s · KV 0.5722 · cache 0</span></div>
-<div class="row"><span class="lbl">firewor · qwen3p7-pl · S=10240 · c=1 · single</span><div class="track"><div class="fill" style="width:15.0%;background:#0f766e"></div></div><span class="val">1099 ms · 128000000.0 tok/s · KV 0.5357 · cache 0</span></div>
-<div class="row"><span class="lbl">firewor · Qwen2.5-7B · S=10240 · c=1 · single</span><div class="track"><div class="fill" style="width:27.0%;background:#0f766e"></div></div><span class="val">1980 ms · 72.5 tok/s · KV 0.551 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="width:8.9%;background:#0f766e"></div></div><span class="val">654 ms · 193.19 tok/s · KV 0.512 · cache 9555</span></div>
-<div class="row"><span class="lbl">firewor · qwen3p7-pl · S=10240 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="width:17.8%;background:#0f766e"></div></div><span class="val">1304 ms · 128000000.0 tok/s · KV 0.5361 · cache 0</span></div>
-<div class="row"><span class="lbl">firewor · Qwen2.5-7B · S=10240 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="width:5.7%;background:#0f766e"></div></div><span class="val">420 ms · 76.3 tok/s · KV 0.551 · cache 9984</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=4 · single</span><div class="track"><div class="fill" style="width:9.2%;background:#0f766e"></div></div><span class="val">671 ms · 188.42 tok/s · KV 0.5722 · cache 0</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=4 · warm_prefix</span><div class="track"><div class="fill" style="width:6.9%;background:#0f766e"></div></div><span class="val">504 ms · 250.43 tok/s · KV 0.512 · cache 9555</span></div>
-<div class="row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=8 · single</span><div class="track"><div class="fill" style="width:16.1%;background:#0f766e"></div></div><span class="val">1179 ms · 414.59 tok/s · KV 0.5722 · cache 0</span></div>
-  </section>
-
-  <section>
-    <h2>Full results matrix</h2>
-    <p class="lead muted">50 rows · stack → provider → model → S → concurrency</p>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Status</th><th>Stack</th><th>Provider</th><th>Model</th><th>Engine</th>
-            <th>In</th><th>Out</th><th>Conc</th><th>Workload</th>
-            <th>TTFT p50</th><th>Tok/s</th><th>Cached</th>
-            <th>KV GQA</th><th>KV dense</th><th>Peak GPU</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+Tesla T4</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1254</td><td class="mono">37.76</td><td class="mono">0</td><td class="mono">0.0132</td><td class="mono">0.0923</td><td class="mono">1.232</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+Tesla T4</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">8418</td><td class="mono">35.62</td><td class="mono">0</td><td class="mono">0.0952</td><td class="mono">0.6665</td><td class="mono">9.323</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">848</td><td class="mono">68.31</td><td class="mono">0</td><td class="mono">0.1187</td><td class="mono">0.8306</td><td class="mono">3.965</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">1</td><td>single</td><td class="mono">280</td><td class="mono">57.72</td><td class="mono">0</td><td class="mono">0.123</td><td class="mono">0.8613</td><td class="mono">3.964</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">856</td><td class="mono">31.31</td><td class="mono">0</td><td class="mono">0.0615</td><td class="mono">0.4307</td><td class="mono">14.547</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2040</td><td class="mono">26.64</td><td class="mono">0</td><td class="mono">0.4443</td><td class="mono">3.1104</td><td class="mono">17.006</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2625</td><td class="mono">26.19</td><td class="mono">0</td><td class="mono">0.5537</td><td class="mono">3.876</td><td class="mono">17.709</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">1</td><td>single</td><td class="mono">2645</td><td class="mono">25.44</td><td class="mono">0</td><td class="mono">0.5742</td><td class="mono">4.0195</td><td class="mono">17.709</td></tr>
-<tr><td><span class="badge todo">sample</span></td><td>serving</td><td>digitalocean_gpu</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM-0.8.x</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">218</td><td class="mono">80.6</td><td class="mono">0</td><td class="mono">0.055</td><td class="mono">0.384</td><td class="mono">—</td></tr>
-<tr><td><span class="badge todo">sample</span></td><td>serving</td><td>digitalocean_gpu</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM-0.8.x</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1420</td><td class="mono">82.6</td><td class="mono">0</td><td class="mono">0.441</td><td class="mono">3.087</td><td class="mono">—</td></tr>
-<tr><td><span class="badge todo">sample</span></td><td>serving</td><td>digitalocean_gpu</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM-0.8.x</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">1810</td><td class="mono">82.0</td><td class="mono">0</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
-<tr><td><span class="badge todo">sample</span></td><td>serving</td><td>digitalocean_gpu</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM-0.8.x</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1785</td><td class="mono">83.3</td><td class="mono">0</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
-<tr><td><span class="badge todo">sample</span></td><td>serving</td><td>digitalocean_gpu</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM-0.8.x</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">385</td><td class="mono">84.7</td><td class="mono">10112</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
-<tr><td><span class="badge todo">sample</span></td><td>serving</td><td>digitalocean_gpu</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM-0.8.x</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">8</td><td>single</td><td class="mono">2240</td><td class="mono">70.4</td><td class="mono">0</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
-<tr><td><span class="badge todo">sample</span></td><td>serving</td><td>digitalocean_gpu</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM-0.8.x</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">32</td><td>single</td><td class="mono">4120</td><td class="mono">54.1</td><td class="mono">0</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">Qwen2.5-7B</td><td class="mono">fireworks-serverless</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">245</td><td class="mono">71.4</td><td class="mono">0</td><td class="mono">0.055</td><td class="mono">0.384</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">Qwen2.5-7B</td><td class="mono">fireworks-serverless</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">1920</td><td class="mono">74.1</td><td class="mono">0</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">Qwen2.5-7B</td><td class="mono">fireworks-serverless</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1980</td><td class="mono">72.5</td><td class="mono">0</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">Qwen2.5-7B</td><td class="mono">fireworks-serverless</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">420</td><td class="mono">76.3</td><td class="mono">9984</td><td class="mono">0.551</td><td class="mono">3.857</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">qwen3p7-plus</td><td class="mono">openai-compatible-api</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1044</td><td class="mono">128000000.0</td><td class="mono">0</td><td class="mono">0.0538</td><td class="mono">0.3765</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">qwen3p7-plus</td><td class="mono">openai-compatible-api</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">1379</td><td class="mono">128000000.0</td><td class="mono">0</td><td class="mono">0.5396</td><td class="mono">3.7773</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">qwen3p7-plus</td><td class="mono">openai-compatible-api</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1099</td><td class="mono">128000000.0</td><td class="mono">0</td><td class="mono">0.5357</td><td class="mono">3.7496</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>fireworks</td><td class="mono">qwen3p7-plus</td><td class="mono">openai-compatible-api</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">1304</td><td class="mono">128000000.0</td><td class="mono">0</td><td class="mono">0.5361</td><td class="mono">3.753</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">512</td><td class="mono">64</td><td class="mono">1</td><td>single</td><td class="mono">950</td><td class="mono">60.18</td><td class="mono">0</td><td class="mono">0.0287</td><td class="mono">0.2008</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">512</td><td class="mono">64</td><td class="mono">4</td><td>single</td><td class="mono">245</td><td class="mono">233.3</td><td class="mono">0</td><td class="mono">0.0287</td><td class="mono">0.2008</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">512</td><td class="mono">64</td><td class="mono">8</td><td>single</td><td class="mono">125</td><td class="mono">456.51</td><td class="mono">0</td><td class="mono">0.0287</td><td class="mono">0.2008</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1684</td><td class="mono">67.91</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.4008</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">455</td><td class="mono">251.44</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.4008</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">234</td><td class="mono">489.56</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.4008</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">2048</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1816</td><td class="mono">66.53</td><td class="mono">0</td><td class="mono">0.1145</td><td class="mono">0.8015</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">2048</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">501</td><td class="mono">241.21</td><td class="mono">0</td><td class="mono">0.1145</td><td class="mono">0.8015</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">2048</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">269</td><td class="mono">449.01</td><td class="mono">0</td><td class="mono">0.1145</td><td class="mono">0.8015</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">885</td><td class="mono">140.59</td><td class="mono">0</td><td class="mono">0.2362</td><td class="mono">1.6531</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2004</td><td class="mono">62.01</td><td class="mono">0</td><td class="mono">0.2289</td><td class="mono">1.6023</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">615</td><td class="mono">201.48</td><td class="mono">3773</td><td class="mono">0.2032</td><td class="mono">1.4225</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">580</td><td class="mono">214.47</td><td class="mono">0</td><td class="mono">0.2289</td><td class="mono">1.6023</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">4</td><td>warm_prefix</td><td class="mono">478</td><td class="mono">258.87</td><td class="mono">3773</td><td class="mono">0.2032</td><td class="mono">1.4225</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">332</td><td class="mono">374.63</td><td class="mono">0</td><td class="mono">0.2289</td><td class="mono">1.6023</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">980</td><td class="mono">128.7</td><td class="mono">0</td><td class="mono">0.4724</td><td class="mono">3.3066</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2172</td><td class="mono">58.06</td><td class="mono">0</td><td class="mono">0.4577</td><td class="mono">3.2042</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">642</td><td class="mono">196.03</td><td class="mono">7629</td><td class="mono">0.4091</td><td class="mono">2.864</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">741</td><td class="mono">170.21</td><td class="mono">0</td><td class="mono">0.4577</td><td class="mono">3.2042</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">4</td><td>warm_prefix</td><td class="mono">497</td><td class="mono">253.28</td><td class="mono">7629</td><td class="mono">0.4091</td><td class="mono">2.864</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">454</td><td class="mono">277.86</td><td class="mono">0</td><td class="mono">0.4577</td><td class="mono">3.2042</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">851</td><td class="mono">148.62</td><td class="mono">0</td><td class="mono">0.5905</td><td class="mono">4.1332</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">1</td><td>single</td><td class="mono">7328</td><td class="mono">66.69</td><td class="mono">0</td><td class="mono">0.5722</td><td class="mono">4.0057</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">654</td><td class="mono">193.19</td><td class="mono">9555</td><td class="mono">0.512</td><td class="mono">3.584</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">671</td><td class="mono">188.42</td><td class="mono">0</td><td class="mono">0.5722</td><td class="mono">4.0057</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">4</td><td>warm_prefix</td><td class="mono">504</td><td class="mono">250.43</td><td class="mono">9555</td><td class="mono">0.512</td><td class="mono">3.584</td><td class="mono">—</td></tr>
-<tr><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">8</td><td>single</td><td class="mono">1179</td><td class="mono">414.59</td><td class="mono">0</td><td class="mono">0.5722</td><td class="mono">4.0057</td><td class="mono">—</td></tr>
-        </tbody>
-      </table>
+  <nav class="topnav">
+    <div class="topnav-inner">
+      <a class="brand-mark" href="/">KV <span>Cache</span></a>
+      <div class="nav-links">
+        <a href="#coverage">Coverage</a>
+        <a href="#insights">Insights</a>
+        <a href="#hardware">Hardware</a>
+        <a href="#model">Model</a>
+        <a href="#serving">Serving</a>
+        <a href="#matrix">Matrix</a>
+        <a href="/">Explorer</a>
+      </div>
     </div>
-  </section>
+  </nav>
 
-  <section>
-    <h2>How to grow the matrix</h2>
-    <pre class="mono"># Model layer (isolated GPU)
+  <main class="wrap">
+    <header class="hero">
+      <h1 class="hero-brand">KV <em>Cache</em></h1>
+      <p class="hero-sub">
+        Three layers on Modal: raw GPU silicon, isolated model math, and serving SLOs —
+        CUDA / NCCL hardware floors, model-layer KV &amp; prefill, and vLLM serving
+        (TP=1 and TP=2) — all on Modal.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#hardware">Hardware probes</a>
+        <a class="btn btn-ghost" href="#matrix">Full matrix</a>
+      </div>
+
+      <div class="stack-strip">
+        <article class="stack-card">
+          <div class="step">01 · Hardware</div>
+          <h3>GPU microbench</h3>
+          <p>Memcpy GB/s, GEMM TFLOPS, optional NCCL busbw — the floor under tok/s.</p>
+        </article>
+        <article class="stack-card">
+          <div class="step">02 · Model</div>
+          <h3>KV + prefill</h3>
+          <p>Batch=1 transformers for GQA KV GiB and TTFT ≈ prefill.</p>
+        </article>
+        <article class="stack-card">
+          <div class="step">03 · Serving</div>
+          <h3>vLLM + API</h3>
+          <p>Concurrency, prefix cache, TP=2 NCCL inference on Modal A100.</p>
+        </article>
+      </div>
+
+      <div class="kpi">
+        <div class="stat"><span class="stat-k">Total runs</span><span class="stat-v">94</span></div>
+        <div class="stat"><span class="stat-k">Live</span><span class="stat-v">94</span></div>
+        <div class="stat"><span class="stat-k">Hardware</span><span class="stat-v">4</span></div>
+        <div class="stat"><span class="stat-k">Model</span><span class="stat-v">22</span></div>
+        <div class="stat"><span class="stat-k">Serving</span><span class="stat-v">68</span></div>
+        <div class="stat"><span class="stat-k">GQA savings</span><span class="stat-v">7×</span></div>
+      </div>
+    </header>
+
+    <section id="coverage">
+      <h2>Coverage</h2>
+      <p class="lead">What the harness can measure — green means live data is on this page.</p>
+      <div class="cov-grid"><article class="cov ok"><div class="cov-top"><strong>Hardware · Memcpy / GEMM</strong><span class="badge ok">live</span></div><p class="detail">Modal GPU bandwidth + TFLOPS</p></article><article class="cov ok"><div class="cov-top"><strong>Hardware · NCCL all-reduce</strong><span class="badge ok">live</span></div><p class="detail">Multi-GPU bus bandwidth</p></article><article class="cov ok"><div class="cov-top"><strong>Model · KV math</strong><span class="badge ok">live</span></div><p class="detail">GQA vs dense GiB vs S</p></article><article class="cov ok"><div class="cov-top"><strong>Model · Prefill TTFT</strong><span class="badge ok">live</span></div><p class="detail">Modal transformers, batch=1</p></article><article class="cov ok"><div class="cov-top"><strong>Model · Decode tok/s</strong><span class="badge ok">live</span></div><p class="detail">Isolated generate path</p></article><article class="cov ok"><div class="cov-top"><strong>Serving · vLLM batching</strong><span class="badge ok">live</span></div><p class="detail">Modal A100 continuous batch</p></article><article class="cov ok"><div class="cov-top"><strong>Serving · SGLang batching</strong><span class="badge ok">live</span></div><p class="detail">Same matrix as vLLM on Modal</p></article><article class="cov ok"><div class="cov-top"><strong>Serving · Prefix cache</strong><span class="badge ok">live</span></div><p class="detail">cold vs warm_prefix</p></article><article class="cov ok"><div class="cov-top"><strong>Serving · Concurrency</strong><span class="badge ok">live</span></div><p class="detail">conc ≥ 4</p></article><article class="cov ok"><div class="cov-top"><strong>Serving · Tensor parallel</strong><span class="badge ok">live</span></div><p class="detail">vLLM TP=2 · A100×2 NCCL</p></article></div>
+    </section>
+
+    <section id="insights">
+      <h2>Headline insights</h2>
+      <p class="lead">Hardware floors + model/serving story from this matrix.</p>
+      <div class="kpi"><div class="stat"><span class="stat-k">Peak memcpy</span><span class="stat-v">690 GB/s</span><span class="stat-s">A100</span></div><div class="stat"><span class="stat-k">Peak BF16 GEMM</span><span class="stat-v">230 TFLOPS</span><span class="stat-s">A100</span></div><div class="stat"><span class="stat-k">NCCL busbw (Modal)</span><span class="stat-v">167 GB/s</span><span class="stat-s">CUDA all-reduce · world 2</span></div><div class="stat"><span class="stat-k">Prefill ∝ context</span><span class="stat-v">2.9×</span><span class="stat-s">Model TTFT 512→10240 tok</span></div><div class="stat"><span class="stat-k">Prefix cache win</span><span class="stat-v">3.5×</span><span class="stat-s">Cold → warm TTFT (matched)</span></div><div class="stat"><span class="stat-k">GQA vs dense KV</span><span class="stat-v">7×</span><span class="stat-s">Qwen2.5-7B · n_kv=4</span></div><div class="stat"><span class="stat-k">Live measurements</span><span class="stat-v">94</span><span class="stat-s">of 94 rows</span></div></div>
+    </section>
+
+    <section id="hardware">
+      <h2>Hardware layer</h2>
+      <p class="lead">
+        CUDA microbench on Modal GPUs (device memcpy + GEMM) and multi-GPU
+        <strong>NCCL all-reduce</strong> on A100:2 — the floor under decode tok/s and tensor-parallel cost.
+      </p>
+      <div class="hw-grid">
+<article class="hw-card"><div class="sku">A100</div><div class="name">NVIDIA A100-SXM4-40GB · 39.49 GiB · CC 8.0</div><div class="hw-metrics"><div><span>Memcpy</span><b>690 GB/s</b></div><div><span>BF16 GEMM</span><b>230 TFLOPS</b></div><div><span>FP16 GEMM</span><b>229 TFLOPS</b></div><div><span>SMs</span><b>108</b></div></div></article>
+<article class="hw-card"><div class="sku">A10G</div><div class="name">NVIDIA A10G · 22.06 GiB · CC 8.6</div><div class="hw-metrics"><div><span>Memcpy</span><b>241 GB/s</b></div><div><span>BF16 GEMM</span><b>67.8 TFLOPS</b></div><div><span>FP16 GEMM</span><b>66.6 TFLOPS</b></div><div><span>SMs</span><b>80</b></div></div></article>
+<article class="hw-card"><div class="sku">T4</div><div class="name">Tesla T4 · 14.56 GiB · CC 7.5</div><div class="hw-metrics"><div><span>Memcpy</span><b>122 GB/s</b></div><div><span>BF16 GEMM</span><b>2.41 TFLOPS</b></div><div><span>FP16 GEMM</span><b>24.4 TFLOPS</b></div><div><span>SMs</span><b>40</b></div></div></article>
+<article class="hw-card"><div class="sku">A100:2</div><div class="name">NCCL all-reduce · world 2</div><div class="hw-metrics"><div><span>Bus BW</span><b>167 GB/s</b></div><div><span>Alg BW</span><b>167 GB/s</b></div></div></article>
+</div>
+<h3>Memcpy bandwidth</h3>
+<div class="bar-row"><span class="lbl">T4</span><div class="track"><div class="fill" style="--w:17.6%;--c:var(--sky)"></div></div><span class="val">122 GB/s</span></div>
+<div class="bar-row"><span class="lbl">A10G</span><div class="track"><div class="fill" style="--w:34.9%;--c:var(--sky)"></div></div><span class="val">241 GB/s</span></div>
+<div class="bar-row"><span class="lbl">A100</span><div class="track"><div class="fill" style="--w:100.0%;--c:var(--sky)"></div></div><span class="val">690 GB/s</span></div>
+<h3>BF16 GEMM</h3>
+<div class="bar-row"><span class="lbl">T4</span><div class="track"><div class="fill" style="--w:1.0%;--c:var(--teal)"></div></div><span class="val">2.4 TFLOPS</span></div>
+<div class="bar-row"><span class="lbl">A10G</span><div class="track"><div class="fill" style="--w:29.4%;--c:var(--teal)"></div></div><span class="val">67.8 TFLOPS</span></div>
+<div class="bar-row"><span class="lbl">A100</span><div class="track"><div class="fill" style="--w:100.0%;--c:var(--teal)"></div></div><span class="val">230.3 TFLOPS</span></div>
+    </section>
+
+    <section id="inventory">
+      <h2>Inventory</h2>
+      <h3>Providers</h3>
+      <div><span class="pill">modal · 94</span></div>
+      <h3>Models / GPUs</h3>
+      <div><span class="pill">Qwen2.5-7B · 75</span> <span class="pill">Qwen2.5-0.5B · 11</span> <span class="pill">Qwen2.5-32B · 4</span> <span class="pill">T4 · 1</span> <span class="pill">A10G · 1</span> <span class="pill">A100 · 1</span> <span class="pill">A100:2 · 1</span></div>
+      <h3>Workloads</h3>
+      <div><span class="pill">single · 66</span> <span class="pill">warm_prefix · 15</span> <span class="pill">cold_prefix · 9</span> <span class="pill">hardware_probe · 3</span> <span class="pill">nccl_allreduce · 1</span></div>
+    </section>
+
+    <section id="model">
+      <h2>Model layer</h2>
+      <p class="lead">Architecture &amp; KV on Modal — batch=1, no HTTP. TTFT ≈ prefill cost.</p>
+      <div class="bar-row"><span class="lbl">Qwen2.5-0.5B · S=512</span><div class="track"><div class="fill" style="--w:11.5%;--c:var(--sky)"></div></div><span class="val">968 ms · 49.5 tok/s · KV 0.0066 · cache 0 · peak 1.08 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-7B · S=512</span><div class="track"><div class="fill" style="--w:1.6%;--c:var(--sky)"></div></div><span class="val">139 ms · 29.4 tok/s · KV 0.0308 · cache 0 · peak 14.4 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-0.5B · S=1024</span><div class="track"><div class="fill" style="--w:6.2%;--c:var(--sky)"></div></div><span class="val">526 ms · 34.0 tok/s · KV 0.0132 · cache 0 · peak 1.23 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-7B · S=1024</span><div class="track"><div class="fill" style="--w:2.8%;--c:var(--sky)"></div></div><span class="val">239 ms · 29.0 tok/s · KV 0.0615 · cache 0 · peak 14.6 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-0.5B · S=1024</span><div class="track"><div class="fill" style="--w:14.9%;--c:var(--sky)"></div></div><span class="val">1254 ms · 37.8 tok/s · KV 0.0132 · cache 0 · peak 1.23 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-7B · S=1024</span><div class="track"><div class="fill" style="--w:10.2%;--c:var(--sky)"></div></div><span class="val">856 ms · 31.3 tok/s · KV 0.0615 · cache 0 · peak 14.5 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-0.5B · S=2048</span><div class="track"><div class="fill" style="--w:13.3%;--c:var(--sky)"></div></div><span class="val">1116 ms · 35.4 tok/s · KV 0.0249 · cache 0 · peak 1.54 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-7B · S=2048</span><div class="track"><div class="fill" style="--w:5.6%;--c:var(--sky)"></div></div><span class="val">471 ms · 28.7 tok/s · KV 0.116 · cache 0 · peak 14.9 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-0.5B · S=4096</span><div class="track"><div class="fill" style="--w:32.6%;--c:var(--sky)"></div></div><span class="val">2743 ms · 37.7 tok/s · KV 0.0483 · cache 0 · peak 3.1 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-7B · S=4096</span><div class="track"><div class="fill" style="--w:11.5%;--c:var(--sky)"></div></div><span class="val">965 ms · 28.1 tok/s · KV 0.226 · cache 0 · peak 15.6 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-0.5B · S=8192</span><div class="track"><div class="fill" style="--w:99.5%;--c:var(--sky)"></div></div><span class="val">8378 ms · 35.3 tok/s · KV 0.0952 · cache 0 · peak 9.32 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-7B · S=8192</span><div class="track"><div class="fill" style="--w:24.2%;--c:var(--sky)"></div></div><span class="val">2035 ms · 27.3 tok/s · KV 0.444 · cache 0 · peak 17 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-0.5B · S=8192</span><div class="track"><div class="fill" style="--w:100.0%;--c:var(--sky)"></div></div><span class="val">8418 ms · 35.6 tok/s · KV 0.0952 · cache 0 · peak 9.32 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-7B · S=8192</span><div class="track"><div class="fill" style="--w:24.2%;--c:var(--sky)"></div></div><span class="val">2040 ms · 26.6 tok/s · KV 0.444 · cache 0 · peak 17 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-7B · S=10240</span><div class="track"><div class="fill" style="--w:31.4%;--c:var(--sky)"></div></div><span class="val">2640 ms · 27.0 tok/s · KV 0.554 · cache 0 · peak 17.7 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-7B · S=10240</span><div class="track"><div class="fill" style="--w:30.9%;--c:var(--sky)"></div></div><span class="val">2605 ms · 26.0 tok/s · KV 0.574 · cache 0 · peak 17.7 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-0.5B · S=10240</span><div class="track"><div class="fill" style="--w:9.7%;--c:var(--sky)"></div></div><span class="val">820 ms · 70.7 tok/s · KV 0.119 · cache 0 · peak 3.96 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-0.5B · S=10240</span><div class="track"><div class="fill" style="--w:3.3%;--c:var(--sky)"></div></div><span class="val">280 ms · 59.3 tok/s · KV 0.123 · cache 0 · peak 3.96 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-7B · S=10240</span><div class="track"><div class="fill" style="--w:31.2%;--c:var(--sky)"></div></div><span class="val">2625 ms · 26.2 tok/s · KV 0.554 · cache 0 · peak 17.7 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-7B · S=10240</span><div class="track"><div class="fill" style="--w:31.4%;--c:var(--sky)"></div></div><span class="val">2645 ms · 25.4 tok/s · KV 0.574 · cache 0 · peak 17.7 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-0.5B · S=10240</span><div class="track"><div class="fill" style="--w:10.1%;--c:var(--sky)"></div></div><span class="val">848 ms · 68.3 tok/s · KV 0.119 · cache 0 · peak 3.96 GiB</span></div>
+<div class="bar-row"><span class="lbl">Qwen2.5-0.5B · S=10240</span><div class="track"><div class="fill" style="--w:3.3%;--c:var(--sky)"></div></div><span class="val">280 ms · 57.7 tok/s · KV 0.123 · cache 0 · peak 3.96 GiB</span></div>
+    </section>
+
+    <section id="serving">
+      <h2>Serving layer</h2>
+      <p class="lead">vLLM on Modal A100 (TP=1) and A100×2 (TP=2). Prefix cache + concurrency.</p>
+      <div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=512 · c=1 · single</span><div class="track"><div class="fill" style="--w:7.9%;--c:var(--teal)"></div></div><span class="val">909 ms · 62.9 tok/s · KV 0.0287 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=512 · c=1 · single</span><div class="track"><div class="fill" style="--w:14.9%;--c:var(--teal)"></div></div><span class="val">1719 ms · 33.3 tok/s · KV 0.0287 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=512 · c=4 · single</span><div class="track"><div class="fill" style="--w:2.1%;--c:var(--teal)"></div></div><span class="val">239 ms · 239 tok/s · KV 0.0287 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=512 · c=4 · single</span><div class="track"><div class="fill" style="--w:68.5%;--c:var(--teal)"></div></div><span class="val">7879 ms · 7.3 tok/s · KV 0.0287 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=512 · c=8 · single</span><div class="track"><div class="fill" style="--w:1.1%;--c:var(--teal)"></div></div><span class="val">122 ms · 468 tok/s · KV 0.0287 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=512 · c=8 · single</span><div class="track"><div class="fill" style="--w:1.7%;--c:var(--teal)"></div></div><span class="val">194 ms · 294 tok/s · KV 0.0287 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=1 · single</span><div class="track"><div class="fill" style="--w:14.4%;--c:var(--teal)"></div></div><span class="val">1656 ms · 69.0 tok/s · KV 0.0573 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=1 · single</span><div class="track"><div class="fill" style="--w:12.4%;--c:var(--teal)"></div></div><span class="val">1431 ms · 42.2 tok/s · KV 0.0573 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=1 · single</span><div class="track"><div class="fill" style="--w:8.3%;--c:var(--teal)"></div></div><span class="val">949 ms · 63.6 tok/s · KV 0.0573 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-32B · S=1024 · c=1 · single</span><div class="track"><div class="fill" style="--w:40.2%;--c:var(--teal)"></div></div><span class="val">4624 ms · 13.1 tok/s · KV 0.262 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=1 · single</span><div class="track"><div class="fill" style="--w:24.0%;--c:var(--teal)"></div></div><span class="val">2761 ms · 41.4 tok/s · KV 0.0573 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=4 · single</span><div class="track"><div class="fill" style="--w:3.8%;--c:var(--teal)"></div></div><span class="val">442 ms · 259 tok/s · KV 0.0573 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=4 · single</span><div class="track"><div class="fill" style="--w:3.8%;--c:var(--teal)"></div></div><span class="val">434 ms · 139 tok/s · KV 0.0573 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-32B · S=1024 · c=4 · single</span><div class="track"><div class="fill" style="--w:7.9%;--c:var(--teal)"></div></div><span class="val">910 ms · 66.4 tok/s · KV 0.262 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=4 · single</span><div class="track"><div class="fill" style="--w:2.4%;--c:var(--teal)"></div></div><span class="val">278 ms · 218 tok/s · KV 0.0573 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=4 · single</span><div class="track"><div class="fill" style="--w:6.4%;--c:var(--teal)"></div></div><span class="val">740 ms · 154 tok/s · KV 0.0573 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=8 · single</span><div class="track"><div class="fill" style="--w:2.0%;--c:var(--teal)"></div></div><span class="val">233 ms · 490 tok/s · KV 0.0573 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=1024 · c=8 · single</span><div class="track"><div class="fill" style="--w:3.1%;--c:var(--teal)"></div></div><span class="val">362 ms · 316 tok/s · KV 0.0573 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=2048 · c=1 · single</span><div class="track"><div class="fill" style="--w:15.5%;--c:var(--teal)"></div></div><span class="val">1787 ms · 67.6 tok/s · KV 0.115 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=2048 · c=1 · single</span><div class="track"><div class="fill" style="--w:25.9%;--c:var(--teal)"></div></div><span class="val">2975 ms · 40.6 tok/s · KV 0.115 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=2048 · c=4 · single</span><div class="track"><div class="fill" style="--w:4.3%;--c:var(--teal)"></div></div><span class="val">489 ms · 247 tok/s · KV 0.115 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=2048 · c=4 · single</span><div class="track"><div class="fill" style="--w:6.9%;--c:var(--teal)"></div></div><span class="val">797 ms · 151 tok/s · KV 0.115 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=2048 · c=8 · single</span><div class="track"><div class="fill" style="--w:2.3%;--c:var(--teal)"></div></div><span class="val">267 ms · 453 tok/s · KV 0.115 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=2048 · c=8 · single</span><div class="track"><div class="fill" style="--w:3.5%;--c:var(--teal)"></div></div><span class="val">406 ms · 298 tok/s · KV 0.115 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="--w:7.6%;--c:var(--teal)"></div></div><span class="val">875 ms · 142 tok/s · KV 0.236 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="--w:6.8%;--c:var(--teal)"></div></div><span class="val">777 ms · 81.2 tok/s · KV 0.236 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-32B · S=4096 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="--w:15.4%;--c:var(--teal)"></div></div><span class="val">1768 ms · 35.7 tok/s · KV 1.08 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="--w:71.4%;--c:var(--teal)"></div></div><span class="val">8212 ms · 7.7 tok/s · KV 0.236 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="--w:10.8%;--c:var(--teal)"></div></div><span class="val">1238 ms · 100 tok/s · KV 0.236 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · single</span><div class="track"><div class="fill" style="--w:16.8%;--c:var(--teal)"></div></div><span class="val">1933 ms · 64.3 tok/s · KV 0.229 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · single</span><div class="track"><div class="fill" style="--w:26.7%;--c:var(--teal)"></div></div><span class="val">3076 ms · 40.4 tok/s · KV 0.229 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="--w:5.3%;--c:var(--teal)"></div></div><span class="val">605 ms · 205 tok/s · KV 0.203 · cache 3773</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="--w:4.4%;--c:var(--teal)"></div></div><span class="val">505 ms · 125 tok/s · KV 0.203 · cache 4064</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-32B · S=4096 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="--w:9.5%;--c:var(--teal)"></div></div><span class="val">1099 ms · 57.3 tok/s · KV 0.929 · cache 4064</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="--w:2.9%;--c:var(--teal)"></div></div><span class="val">330 ms · 191 tok/s · KV 0.203 · cache 4064</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="--w:8.7%;--c:var(--teal)"></div></div><span class="val">997 ms · 124 tok/s · KV 0.203 · cache 4064</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=4 · single</span><div class="track"><div class="fill" style="--w:5.0%;--c:var(--teal)"></div></div><span class="val">573 ms · 217 tok/s · KV 0.229 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=4 · single</span><div class="track"><div class="fill" style="--w:7.7%;--c:var(--teal)"></div></div><span class="val">884 ms · 141 tok/s · KV 0.229 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=4 · warm_prefix</span><div class="track"><div class="fill" style="--w:4.0%;--c:var(--teal)"></div></div><span class="val">464 ms · 267 tok/s · KV 0.203 · cache 3773</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=4 · warm_prefix</span><div class="track"><div class="fill" style="--w:6.8%;--c:var(--teal)"></div></div><span class="val">782 ms · 158 tok/s · KV 0.203 · cache 4064</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=8 · single</span><div class="track"><div class="fill" style="--w:2.8%;--c:var(--teal)"></div></div><span class="val">327 ms · 380 tok/s · KV 0.229 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=4096 · c=8 · single</span><div class="track"><div class="fill" style="--w:4.2%;--c:var(--teal)"></div></div><span class="val">479 ms · 260 tok/s · KV 0.229 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="--w:8.4%;--c:var(--teal)"></div></div><span class="val">965 ms · 131 tok/s · KV 0.472 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="--w:11.6%;--c:var(--teal)"></div></div><span class="val">1340 ms · 94.2 tok/s · KV 0.472 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=1 · single</span><div class="track"><div class="fill" style="--w:18.8%;--c:var(--teal)"></div></div><span class="val">2160 ms · 58.4 tok/s · KV 0.458 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=1 · single</span><div class="track"><div class="fill" style="--w:28.5%;--c:var(--teal)"></div></div><span class="val">3285 ms · 38.4 tok/s · KV 0.458 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="--w:5.5%;--c:var(--teal)"></div></div><span class="val">635 ms · 198 tok/s · KV 0.409 · cache 7629</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="--w:9.3%;--c:var(--teal)"></div></div><span class="val">1071 ms · 118 tok/s · KV 0.409 · cache 8160</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=4 · single</span><div class="track"><div class="fill" style="--w:6.4%;--c:var(--teal)"></div></div><span class="val">736 ms · 171 tok/s · KV 0.458 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=4 · single</span><div class="track"><div class="fill" style="--w:8.9%;--c:var(--teal)"></div></div><span class="val">1028 ms · 123 tok/s · KV 0.458 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=4 · warm_prefix</span><div class="track"><div class="fill" style="--w:4.2%;--c:var(--teal)"></div></div><span class="val">488 ms · 258 tok/s · KV 0.409 · cache 7629</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=4 · warm_prefix</span><div class="track"><div class="fill" style="--w:7.3%;--c:var(--teal)"></div></div><span class="val">843 ms · 149 tok/s · KV 0.409 · cache 8160</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=8 · single</span><div class="track"><div class="fill" style="--w:3.9%;--c:var(--teal)"></div></div><span class="val">451 ms · 279 tok/s · KV 0.458 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=8192 · c=8 · single</span><div class="track"><div class="fill" style="--w:4.7%;--c:var(--teal)"></div></div><span class="val">545 ms · 231 tok/s · KV 0.458 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="--w:7.3%;--c:var(--teal)"></div></div><span class="val">841 ms · 150 tok/s · KV 0.591 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=1 · cold_prefix</span><div class="track"><div class="fill" style="--w:10.3%;--c:var(--teal)"></div></div><span class="val">1184 ms · 107 tok/s · KV 0.591 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=1 · single</span><div class="track"><div class="fill" style="--w:63.2%;--c:var(--teal)"></div></div><span class="val">7270 ms · 67.2 tok/s · KV 0.572 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=1 · single</span><div class="track"><div class="fill" style="--w:28.1%;--c:var(--teal)"></div></div><span class="val">3234 ms · 39.1 tok/s · KV 0.572 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=1 · single</span><div class="track"><div class="fill" style="--w:100.0%;--c:var(--teal)"></div></div><span class="val">11506 ms · 42.5 tok/s · KV 0.572 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="--w:5.6%;--c:var(--teal)"></div></div><span class="val">648 ms · 195 tok/s · KV 0.512 · cache 9555</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=1 · warm_prefix</span><div class="track"><div class="fill" style="--w:9.0%;--c:var(--teal)"></div></div><span class="val">1035 ms · 122 tok/s · KV 0.512 · cache 10208</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=4 · single</span><div class="track"><div class="fill" style="--w:5.6%;--c:var(--teal)"></div></div><span class="val">648 ms · 195 tok/s · KV 0.572 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=4 · single</span><div class="track"><div class="fill" style="--w:8.8%;--c:var(--teal)"></div></div><span class="val">1017 ms · 124 tok/s · KV 0.572 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=4 · warm_prefix</span><div class="track"><div class="fill" style="--w:4.3%;--c:var(--teal)"></div></div><span class="val">500 ms · 253 tok/s · KV 0.512 · cache 9555</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=4 · warm_prefix</span><div class="track"><div class="fill" style="--w:7.3%;--c:var(--teal)"></div></div><span class="val">842 ms · 150 tok/s · KV 0.512 · cache 10208</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=8 · single</span><div class="track"><div class="fill" style="--w:10.2%;--c:var(--teal)"></div></div><span class="val">1170 ms · 418 tok/s · KV 0.572 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=8 · single</span><div class="track"><div class="fill" style="--w:4.3%;--c:var(--teal)"></div></div><span class="val">495 ms · 255 tok/s · KV 0.572 · cache 0</span></div>
+<div class="bar-row"><span class="lbl">modal · Qwen2.5-7B · S=10240 · c=8 · single</span><div class="track"><div class="fill" style="--w:13.5%;--c:var(--teal)"></div></div><span class="val">1553 ms · 315 tok/s · KV 0.572 · cache 0</span></div>
+    </section>
+
+    <section id="matrix">
+      <h2>Inference results matrix</h2>
+      <p class="lead">90 rows · hardware probes shown above</p>
+      <div class="filters" id="filters" role="group" aria-label="Filter results">
+        <button type="button" class="active" data-filter="all">All</button>
+        <button type="button" data-filter="layer:model">Model</button>
+        <button type="button" data-filter="layer:serving">Serving</button>
+        <button type="button" data-filter="live:1">Live only</button>
+        <button type="button" data-filter="provider:modal">modal</button>
+      </div>
+      <div class="table-wrap">
+        <table id="results">
+          <thead>
+            <tr>
+              <th>Status</th><th>Stack</th><th>Provider</th><th>Model</th><th>Engine</th>
+              <th>In</th><th>Out</th><th>Conc</th><th>Workload</th>
+              <th>TTFT p50</th><th>Tok/s</th><th>Cached</th>
+              <th>KV GQA</th><th>KV dense</th><th>Peak GPU</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+Tesla T4</td><td class="mono">512</td><td class="mono">64</td><td class="mono">1</td><td>single</td><td class="mono">968</td><td class="mono">49.5</td><td class="mono">0</td><td class="mono">0.0066</td><td class="mono">0.0461</td><td class="mono">1.08</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+Tesla T4</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">526</td><td class="mono">34.0</td><td class="mono">0</td><td class="mono">0.0132</td><td class="mono">0.0923</td><td class="mono">1.23</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+Tesla T4</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1254</td><td class="mono">37.8</td><td class="mono">0</td><td class="mono">0.0132</td><td class="mono">0.0923</td><td class="mono">1.23</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+Tesla T4</td><td class="mono">2048</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1116</td><td class="mono">35.4</td><td class="mono">0</td><td class="mono">0.0249</td><td class="mono">0.174</td><td class="mono">1.54</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+Tesla T4</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2743</td><td class="mono">37.7</td><td class="mono">0</td><td class="mono">0.0483</td><td class="mono">0.338</td><td class="mono">3.1</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+Tesla T4</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">8378</td><td class="mono">35.3</td><td class="mono">0</td><td class="mono">0.0952</td><td class="mono">0.666</td><td class="mono">9.32</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+Tesla T4</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">8418</td><td class="mono">35.6</td><td class="mono">0</td><td class="mono">0.0952</td><td class="mono">0.666</td><td class="mono">9.32</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">820</td><td class="mono">70.7</td><td class="mono">0</td><td class="mono">0.119</td><td class="mono">0.831</td><td class="mono">3.96</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">1</td><td>single</td><td class="mono">280</td><td class="mono">59.3</td><td class="mono">0</td><td class="mono">0.123</td><td class="mono">0.861</td><td class="mono">3.96</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">848</td><td class="mono">68.3</td><td class="mono">0</td><td class="mono">0.119</td><td class="mono">0.831</td><td class="mono">3.96</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-0.5B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">1</td><td>single</td><td class="mono">280</td><td class="mono">57.7</td><td class="mono">0</td><td class="mono">0.123</td><td class="mono">0.861</td><td class="mono">3.96</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">512</td><td class="mono">64</td><td class="mono">1</td><td>single</td><td class="mono">139</td><td class="mono">29.4</td><td class="mono">0</td><td class="mono">0.0308</td><td class="mono">0.215</td><td class="mono">14.4</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">239</td><td class="mono">29.0</td><td class="mono">0</td><td class="mono">0.0615</td><td class="mono">0.431</td><td class="mono">14.6</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">856</td><td class="mono">31.3</td><td class="mono">0</td><td class="mono">0.0615</td><td class="mono">0.431</td><td class="mono">14.5</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">2048</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">471</td><td class="mono">28.7</td><td class="mono">0</td><td class="mono">0.116</td><td class="mono">0.814</td><td class="mono">14.9</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">965</td><td class="mono">28.1</td><td class="mono">0</td><td class="mono">0.226</td><td class="mono">1.58</td><td class="mono">15.6</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2035</td><td class="mono">27.3</td><td class="mono">0</td><td class="mono">0.444</td><td class="mono">3.11</td><td class="mono">17</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2040</td><td class="mono">26.6</td><td class="mono">0</td><td class="mono">0.444</td><td class="mono">3.11</td><td class="mono">17</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2640</td><td class="mono">27.0</td><td class="mono">0</td><td class="mono">0.554</td><td class="mono">3.88</td><td class="mono">17.7</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">1</td><td>single</td><td class="mono">2605</td><td class="mono">26.0</td><td class="mono">0</td><td class="mono">0.574</td><td class="mono">4.02</td><td class="mono">17.7</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2625</td><td class="mono">26.2</td><td class="mono">0</td><td class="mono">0.554</td><td class="mono">3.88</td><td class="mono">17.7</td></tr>
+<tr data-layer="model" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>model</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">transformers+NVIDIA A10</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">1</td><td>single</td><td class="mono">2645</td><td class="mono">25.4</td><td class="mono">0</td><td class="mono">0.574</td><td class="mono">4.02</td><td class="mono">17.7</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-32B</td><td class="mono">vLLM+Modal+TP2</td><td class="mono">1024</td><td class="mono">64</td><td class="mono">1</td><td>single</td><td class="mono">4624</td><td class="mono">13.1</td><td class="mono">0</td><td class="mono">0.262</td><td class="mono">1.31</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-32B</td><td class="mono">vLLM+Modal+TP2</td><td class="mono">1024</td><td class="mono">64</td><td class="mono">4</td><td>single</td><td class="mono">910</td><td class="mono">66.4</td><td class="mono">0</td><td class="mono">0.262</td><td class="mono">1.31</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-32B</td><td class="mono">vLLM+Modal+TP2</td><td class="mono">4096</td><td class="mono">64</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">1768</td><td class="mono">35.7</td><td class="mono">0</td><td class="mono">1.08</td><td class="mono">5.4</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-32B</td><td class="mono">vLLM+Modal+TP2</td><td class="mono">4096</td><td class="mono">64</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">1099</td><td class="mono">57.3</td><td class="mono">4064</td><td class="mono">0.929</td><td class="mono">4.64</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">512</td><td class="mono">64</td><td class="mono">1</td><td>single</td><td class="mono">909</td><td class="mono">62.9</td><td class="mono">0</td><td class="mono">0.0287</td><td class="mono">0.201</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">512</td><td class="mono">64</td><td class="mono">1</td><td>single</td><td class="mono">1719</td><td class="mono">33.3</td><td class="mono">0</td><td class="mono">0.0287</td><td class="mono">0.201</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">512</td><td class="mono">64</td><td class="mono">4</td><td>single</td><td class="mono">239</td><td class="mono">239</td><td class="mono">0</td><td class="mono">0.0287</td><td class="mono">0.201</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">512</td><td class="mono">64</td><td class="mono">4</td><td>single</td><td class="mono">7879</td><td class="mono">7.3</td><td class="mono">0</td><td class="mono">0.0287</td><td class="mono">0.201</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">512</td><td class="mono">64</td><td class="mono">8</td><td>single</td><td class="mono">122</td><td class="mono">468</td><td class="mono">0</td><td class="mono">0.0287</td><td class="mono">0.201</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">512</td><td class="mono">64</td><td class="mono">8</td><td>single</td><td class="mono">194</td><td class="mono">294</td><td class="mono">0</td><td class="mono">0.0287</td><td class="mono">0.201</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1656</td><td class="mono">69.0</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.401</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">1024</td><td class="mono">64</td><td class="mono">1</td><td>single</td><td class="mono">1431</td><td class="mono">42.2</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.401</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">1024</td><td class="mono">64</td><td class="mono">1</td><td>single</td><td class="mono">949</td><td class="mono">63.6</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.401</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2761</td><td class="mono">41.4</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.401</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">442</td><td class="mono">259</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.401</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">1024</td><td class="mono">64</td><td class="mono">4</td><td>single</td><td class="mono">434</td><td class="mono">139</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.401</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">1024</td><td class="mono">64</td><td class="mono">4</td><td>single</td><td class="mono">278</td><td class="mono">218</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.401</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">740</td><td class="mono">154</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.401</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">233</td><td class="mono">490</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.401</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">1024</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">362</td><td class="mono">316</td><td class="mono">0</td><td class="mono">0.0573</td><td class="mono">0.401</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">2048</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1787</td><td class="mono">67.6</td><td class="mono">0</td><td class="mono">0.115</td><td class="mono">0.801</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">2048</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2975</td><td class="mono">40.6</td><td class="mono">0</td><td class="mono">0.115</td><td class="mono">0.801</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">2048</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">489</td><td class="mono">247</td><td class="mono">0</td><td class="mono">0.115</td><td class="mono">0.801</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">2048</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">797</td><td class="mono">151</td><td class="mono">0</td><td class="mono">0.115</td><td class="mono">0.801</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">2048</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">267</td><td class="mono">453</td><td class="mono">0</td><td class="mono">0.115</td><td class="mono">0.801</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">2048</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">406</td><td class="mono">298</td><td class="mono">0</td><td class="mono">0.115</td><td class="mono">0.801</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">875</td><td class="mono">142</td><td class="mono">0</td><td class="mono">0.236</td><td class="mono">1.65</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">64</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">777</td><td class="mono">81.2</td><td class="mono">0</td><td class="mono">0.236</td><td class="mono">1.65</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">4096</td><td class="mono">64</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">8212</td><td class="mono">7.7</td><td class="mono">0</td><td class="mono">0.236</td><td class="mono">1.65</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">1238</td><td class="mono">100</td><td class="mono">0</td><td class="mono">0.236</td><td class="mono">1.65</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">1933</td><td class="mono">64.3</td><td class="mono">0</td><td class="mono">0.229</td><td class="mono">1.6</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">3076</td><td class="mono">40.4</td><td class="mono">0</td><td class="mono">0.229</td><td class="mono">1.6</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">605</td><td class="mono">205</td><td class="mono">3773</td><td class="mono">0.203</td><td class="mono">1.42</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">64</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">505</td><td class="mono">125</td><td class="mono">4064</td><td class="mono">0.203</td><td class="mono">1.42</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">4096</td><td class="mono">64</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">330</td><td class="mono">191</td><td class="mono">4064</td><td class="mono">0.203</td><td class="mono">1.42</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">997</td><td class="mono">124</td><td class="mono">4064</td><td class="mono">0.203</td><td class="mono">1.42</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">573</td><td class="mono">217</td><td class="mono">0</td><td class="mono">0.229</td><td class="mono">1.6</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">884</td><td class="mono">141</td><td class="mono">0</td><td class="mono">0.229</td><td class="mono">1.6</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">4</td><td>warm_prefix</td><td class="mono">464</td><td class="mono">267</td><td class="mono">3773</td><td class="mono">0.203</td><td class="mono">1.42</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">4</td><td>warm_prefix</td><td class="mono">782</td><td class="mono">158</td><td class="mono">4064</td><td class="mono">0.203</td><td class="mono">1.42</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">327</td><td class="mono">380</td><td class="mono">0</td><td class="mono">0.229</td><td class="mono">1.6</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">4096</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">479</td><td class="mono">260</td><td class="mono">0</td><td class="mono">0.229</td><td class="mono">1.6</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">965</td><td class="mono">131</td><td class="mono">0</td><td class="mono">0.472</td><td class="mono">3.31</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">1340</td><td class="mono">94.2</td><td class="mono">0</td><td class="mono">0.472</td><td class="mono">3.31</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">2160</td><td class="mono">58.4</td><td class="mono">0</td><td class="mono">0.458</td><td class="mono">3.2</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">3285</td><td class="mono">38.4</td><td class="mono">0</td><td class="mono">0.458</td><td class="mono">3.2</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">635</td><td class="mono">198</td><td class="mono">7629</td><td class="mono">0.409</td><td class="mono">2.86</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">1071</td><td class="mono">118</td><td class="mono">8160</td><td class="mono">0.409</td><td class="mono">2.86</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">736</td><td class="mono">171</td><td class="mono">0</td><td class="mono">0.458</td><td class="mono">3.2</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">1028</td><td class="mono">123</td><td class="mono">0</td><td class="mono">0.458</td><td class="mono">3.2</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">4</td><td>warm_prefix</td><td class="mono">488</td><td class="mono">258</td><td class="mono">7629</td><td class="mono">0.409</td><td class="mono">2.86</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">4</td><td>warm_prefix</td><td class="mono">843</td><td class="mono">149</td><td class="mono">8160</td><td class="mono">0.409</td><td class="mono">2.86</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">451</td><td class="mono">279</td><td class="mono">0</td><td class="mono">0.458</td><td class="mono">3.2</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">8192</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">545</td><td class="mono">231</td><td class="mono">0</td><td class="mono">0.458</td><td class="mono">3.2</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">841</td><td class="mono">150</td><td class="mono">0</td><td class="mono">0.591</td><td class="mono">4.13</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>cold_prefix</td><td class="mono">1184</td><td class="mono">107</td><td class="mono">0</td><td class="mono">0.591</td><td class="mono">4.13</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">1</td><td>single</td><td class="mono">7270</td><td class="mono">67.2</td><td class="mono">0</td><td class="mono">0.572</td><td class="mono">4.01</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>single</td><td class="mono">3234</td><td class="mono">39.1</td><td class="mono">0</td><td class="mono">0.572</td><td class="mono">4.01</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">1</td><td>single</td><td class="mono">11506</td><td class="mono">42.5</td><td class="mono">0</td><td class="mono">0.572</td><td class="mono">4.01</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">648</td><td class="mono">195</td><td class="mono">9555</td><td class="mono">0.512</td><td class="mono">3.58</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">1</td><td>warm_prefix</td><td class="mono">1035</td><td class="mono">122</td><td class="mono">10208</td><td class="mono">0.512</td><td class="mono">3.58</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">648</td><td class="mono">195</td><td class="mono">0</td><td class="mono">0.572</td><td class="mono">4.01</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">4</td><td>single</td><td class="mono">1017</td><td class="mono">124</td><td class="mono">0</td><td class="mono">0.572</td><td class="mono">4.01</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">4</td><td>warm_prefix</td><td class="mono">500</td><td class="mono">253</td><td class="mono">9555</td><td class="mono">0.512</td><td class="mono">3.58</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">4</td><td>warm_prefix</td><td class="mono">842</td><td class="mono">150</td><td class="mono">10208</td><td class="mono">0.512</td><td class="mono">3.58</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">vLLM+Modal+TP1</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">8</td><td>single</td><td class="mono">1170</td><td class="mono">418</td><td class="mono">0</td><td class="mono">0.572</td><td class="mono">4.01</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">10240</td><td class="mono">128</td><td class="mono">8</td><td>single</td><td class="mono">495</td><td class="mono">255</td><td class="mono">0</td><td class="mono">0.572</td><td class="mono">4.01</td><td class="mono">—</td></tr>
+<tr data-layer="serving" data-provider="modal" data-live="1"><td><span class="badge ok">live</span></td><td>serving</td><td>modal</td><td class="mono">Qwen2.5-7B</td><td class="mono">SGLang+Modal+TP1</td><td class="mono">10240</td><td class="mono">512</td><td class="mono">8</td><td>single</td><td class="mono">1553</td><td class="mono">315</td><td class="mono">0</td><td class="mono">0.572</td><td class="mono">4.01</td><td class="mono">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="reproduce">
+      <h2>Reproduce</h2>
+      <pre class="mono"><span class="c"># Full stack (hardware+NCCL → model → vLLM → API → report)</span>
+npm run benchmark:full
+
+<span class="c"># Or piece by piece — CUDA memcpy/GEMM + NCCL on Modal</span>
+npm run benchmark:modal:hardware:nccl
+
+<span class="c"># Model layer (transformers)</span>
 npm run benchmark:modal
 
-# Serving layer on Modal (vLLM + prefix cache + concurrency)
+<span class="c"># Serving layer (vLLM + prefix cache)</span>
 npm run benchmark:modal:vllm
 
-# Hosted API (Fireworks)
-export OPENAI_API_KEY=... OPENAI_BASE_URL=https://api.fireworks.ai/inference/v1
-npm run benchmark:api
+<span class="c"># Serving — vLLM TP=2 (32B · A100×2 · NCCL)</span>
+npm run benchmark:modal:vllm:tp2
 
-# Regenerate this page
+<span class="c"># Rebuild this page</span>
 npm run report && npm run build</pre>
-  </section>
+    </section>
 
-  <p class="sans"><a href="/">← KV explorer</a></p>
-  <footer>Generated 2026-08-23 22:20 UTC · Prefer live Modal/Fireworks rows over sample DO placeholders.</footer>
+    <footer>
+      <span>Generated 2026-08-24 07:21 UTC</span>
+      <span>Hardware → model → serving · Modal only</span>
+      <a href="/">← KV explorer</a>
+    </footer>
+  </main>
+
+<script>
+(function () {
+  const buttons = document.querySelectorAll("#filters button");
+  const rows = document.querySelectorAll("#results tbody tr");
+  function apply(filter) {
+    buttons.forEach((b) => b.classList.toggle("active", b.dataset.filter === filter));
+    rows.forEach((tr) => {
+      let show = true;
+      if (filter === "all") show = true;
+      else if (filter.startsWith("layer:")) show = tr.dataset.layer === filter.slice(6);
+      else if (filter.startsWith("provider:")) show = tr.dataset.provider === filter.slice(9);
+      else if (filter === "live:1") show = tr.dataset.live === "1";
+      tr.style.display = show ? "" : "none";
+    });
+  }
+  buttons.forEach((b) => b.addEventListener("click", () => apply(b.dataset.filter)));
+})();
+</script>
 </body>
 </html>

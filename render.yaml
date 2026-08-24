@@ -1,0 +1,14 @@
+# Static demo site (KV explorer + benchmark report). GPU benches stay on Modal.
+services:
+  - type: web
+    name: kvcacheapp
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    routes:
+      - type: rewrite
+        source: /
+        destination: /index.html
+      - type: rewrite
+        source: /benchmark-report
+        destination: /benchmark-report.html

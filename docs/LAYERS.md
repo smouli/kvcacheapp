@@ -1,6 +1,6 @@
-# Benchmark stack: model layer vs serving layer
+# Benchmark stack: hardware → model → serving
 
-Inference benchmarks are often mixed together. This project separates **two tiers** so Excel rows and the HTML report stay interpretable.
+Inference numbers are ambiguous without the GPU underneath. This project separates **three tiers**.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -13,8 +13,33 @@ Inference benchmarks are often mixed together. This project separates **two tier
 │  MODEL LAYER  — what the weights + KV cache do on GPU       │
 │  prefill · decode · GQA KV bytes · peak VRAM · batch=1      │
 │  Tools: Modal + transformers, isolated vLLM (no load)       │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ sits on top of
+┌───────────────────────────▼─────────────────────────────────┐
+│  HARDWARE LAYER — raw silicon capability                    │
+│  memcpy GB/s · GEMM TFLOPS · NCCL busbw · VRAM · SM count  │
+│  Tools: Modal GPU microbench (PyTorch)                      │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+## Hardware layer
+
+**Question:** What is this GPU *actually* delivering for bandwidth, compute, and multi-GPU collectives?
+
+| Probe | Why it matters |
+|-------|----------------|
+| Device→device memcpy GB/s | Decode is often memory-bound (KV reads) |
+| BF16 / FP16 GEMM TFLOPS | Prefill / large matmuls |
+| NCCL all-reduce busbw | Tensor-parallel scale-out cost |
+| VRAM / SM count / CC | Capacity and architecture class |
+
+```bash
+npm run benchmark:modal:hardware          # T4 + A10G + A100
+npm run benchmark:modal:hardware:quick    # T4 only
+npm run benchmark:modal:hardware:nccl     # + A100:2 NCCL
+```
+
+CSV: `stack_layer=hardware` → `benchmarks/results/hardware_runs.csv`.
 
 ## Model layer
 
@@ -33,77 +58,25 @@ Inference benchmarks are often mixed together. This project separates **two tier
 - TTFT grows with **input length** (prefill)
 - Decode tok/s is mostly **decode-bound** (KV read bandwidth)
 
-**How we run it here**
-
 ```bash
-npm run benchmark:modal:quick   # Modal GPU + transformers
-npm run benchmark:modal         # matrix across models / S
+npm run benchmark:modal:quick
+npm run benchmark:modal
 ```
-
-CSV: `stack_layer=model`, `layer=inference`, `provider=modal`.
-
----
 
 ## Serving layer
 
-**Question:** Under **real serving** (API or engine with batching), what **latency and throughput** do clients see — including **prefix cache**, **concurrency**, and **queueing**?
-
-| Property | Typical setup |
-|----------|----------------|
-| **Interface** | OpenAI-compatible **HTTP** or vLLM server + llmperf |
-| **Load** | **Concurrency** 1 → 32+, continuous batching |
-| **KV focus** | **cached_prompt_tokens**, warm vs cold prefix, optional `kv_blocks_fraction` (DO/Fireworks metrics) |
-| **Latency focus** | TTFT p50/p95 **under load**, system tok/s, E2E response |
-
-**What you learn**
-
-- Same model can look **much faster** on repeat prefixes (serving cache ≠ model math)
-- High concurrency **inflates TTFT** (queue) even if model layer prefill is unchanged
-- Provider API numbers **include network**; not comparable 1:1 to Modal model runs
-
-**How we run it here**
+**Question:** Under **real serving** (API or engine with batching), what do clients see — including **prefix cache** and **concurrency**?
 
 ```bash
-# API / provider (Fireworks, DO Dedicated endpoint)
-npm run benchmark:api
-
-# Engine on GPU droplet (vLLM + llmperf)
-npm run benchmark:engine
+npm run benchmark:modal:vllm
+npm run benchmark:modal:vllm:tp2   # 32B · NCCL · A100×2
 ```
-
-CSV: `stack_layer=serving`, `layer` = `api` | `engine` | `kv_cache`.
-
----
 
 ## Side-by-side
 
-| | **Model layer** | **Serving layer** |
-|--|-----------------|-------------------|
-| **Unit of work** | One forward / generate path | Many requests, endpoints |
-| **KV cache** | Bytes formula + GPU peak | Prefix hits, block utilization, eviction |
-| **TTFT** | Mostly **prefill** | Prefill + **queue** + **network** |
-| **Concurrency** | Fixed at 1 | Swept (1, 8, 32…) |
-| **Compare to LMCache sizing** | Yes (GQA formula) | Indirect (cached tokens, TTFT drop) |
-| **Compare to Artificial Analysis** | No | Yes (API-style) |
-
----
-
-## Phases (this repo) mapped to stack
-
-| Phase | Stack | What |
-|-------|--------|------|
-| **A** | Model *or* Serving | Model = Modal; Serving = vLLM+llmperf on droplet |
-| **B** | Serving | Prefix cache cold/warm, multi-turn |
-| **C** | Serving | Provider API monitoring (AA-like shapes) |
-| **D** | — | Quality (MMLU etc.) — not latency |
-
----
-
-## Excel / report columns
-
-- **`stack_layer`**: `model` \| `serving` — use this for pivots
-- **`layer`**: finer grain — `inference`, `engine`, `api`, `kv_cache`
-- **`kv_gib_modeled_gqa`**: meaningful at **model** layer; still logged at serving for linkage
-- **`cached_prompt_tokens`**: **serving only**
-
-Do **not** compare Modal model TTFT directly to Fireworks API TTFT without noting network + queue. **Do** compare both to the same **KV GiB** column for a given **S**.
+| | **Hardware** | **Model** | **Serving** |
+|--|--------------|-----------|-------------|
+| **Question** | How fast is the GPU? | How expensive is this arch/S? | What do clients see? |
+| **Batch** | n/a | 1 | many |
+| **Network** | no | no | yes (API) / local (engine) |
+| **Prefix cache** | n/a | off | on (warm vs cold) |
